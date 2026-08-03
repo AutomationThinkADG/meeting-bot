@@ -8,7 +8,7 @@ on:
   #   branches:
   #     - main  # Build-only (no push) so the required "build" check reports on PRs,
   #             # including PRs from forks (no registry secrets needed since we don't push)
-
+#
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
