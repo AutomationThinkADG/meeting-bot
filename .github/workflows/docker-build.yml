@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'main'  # Build and push on all branches
+      - 'dev'
   # pull_request:
   #   branches:
   #     - main  # Build-only (no push) so the required "build" check reports on PRs,
