@@ -5,10 +5,10 @@ on:
   # Automatically trigger it when detected changes in repo
   push:
     branches: 
-      [ main ]
+      - main
     paths:
-    - '**'
-    - '.github/workflows/meeting-bot-AutoDeployTrigger-2fac314a-6f10-4da2-afcf-01aafd2c968d.yml'
+      - '**'
+      - '.github/workflows/meeting-bot-AutoDeployTrigger-2fac314a-6f10-4da2-afcf-01aafd2c968d.yml'
 
   # Allow manual trigger 
   workflow_dispatch:      
@@ -17,8 +17,8 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions: 
-      id-token: write #This is required for requesting the OIDC JWT Token
-      contents: read #Required when GH token is used to authenticate with private repo
+      id-token: write # This is required for requesting the OIDC JWT Token
+      contents: read  # Required when GH token is used to authenticate with private repo
 
     steps:
       - name: Checkout to the branch
@@ -31,19 +31,14 @@ jobs:
           tenant-id: ${{ secrets.MEETINGBOT_AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.MEETINGBOT_AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build and push container image to registry
+      - name: Build and deploy Container App
         uses: azure/container-apps-deploy-action@v2
         with:
           appSourcePath: ${{ github.workspace }}
-          _dockerfilePathKey_: _dockerfilePath_
-          _targetLabelKey_: _targetLabel_
-          registryUrl: 
+          dockerfilePath: Dockerfile
+          registryUrl: ""
           registryUsername: ${{ secrets.MEETINGBOT_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.MEETINGBOT_REGISTRY_PASSWORD }}
           containerAppName: meeting-bot
           resourceGroup: rg-container-prod
-          imageToBuild: default/[parameters('containerAppName')]:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
-
-
+          imageToBuild: meeting-bot:${{ github.sha }}
