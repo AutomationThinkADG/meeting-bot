@@ -3,12 +3,11 @@ name: Build and Push Docker Image
 on:
   push:
     branches:
-      - 'main'  # Build and push on all branches
+      - 'main'
       - 'dev'
   # pull_request:
   #   branches:
-  #     - main  # Build-only (no push) so the required "build" check reports on PRs,
-  #             # including PRs from forks (no registry secrets needed since we don't push)
+  #     - main
 
 env:
   REGISTRY: ghcr.io
@@ -68,7 +67,7 @@ jobs:
           git tag ${{ env.TAG }}
           git push origin ${{ env.TAG }}
 
-      # Always generate Docker tags for build, but only include version tag on main
+      # Extract metadata for main image
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -80,6 +79,7 @@ jobs:
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
 
+      # Extract metadata for Chrome CDP image
       - name: Extract Chrome CDP metadata
         id: chrome-cdp-meta
         uses: docker/metadata-action@v5
@@ -91,14 +91,12 @@ jobs:
             type=sha,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
 
-      # Build and push on all branches
+      # Build and push Main Docker image
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile.production
-          # Multi-arch on push; amd64-only on PRs to keep the build check fast
-          # (arm64 builds under QEMU emulation are very slow for this image).
           platforms: ${{ github.event_name == 'pull_request' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -106,6 +104,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # Build and push Chrome CDP Docker image
       - name: Build and push Chrome CDP Docker image
         uses: docker/build-push-action@v5
         with:

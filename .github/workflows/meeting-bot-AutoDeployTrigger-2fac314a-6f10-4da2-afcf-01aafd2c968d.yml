@@ -6,6 +6,7 @@ on:
   push:
     branches: 
       - main
+      - dev  # <-- Added dev branch so it triggers on your new branch!
     paths:
       - '**'
       - '.github/workflows/meeting-bot-AutoDeployTrigger-2fac314a-6f10-4da2-afcf-01aafd2c968d.yml'
@@ -19,6 +20,11 @@ jobs:
     permissions: 
       id-token: write # This is required for requesting the OIDC JWT Token
       contents: read  # Required when GH token is used to authenticate with private repo
+
+    # Set the environment variables dynamically based on which branch triggered the workflow
+    env:
+      APP_NAME: ${{ github.ref == 'refs/heads/main' && 'meeting-bot' || 'meeting-bot-dev' }}
+      RG_NAME: ${{ github.ref == 'refs/heads/main' && 'rg-container-prod' || 'rg-container-dev' }}
 
     steps:
       - name: Checkout to the branch
@@ -39,6 +45,8 @@ jobs:
           registryUrl: ""
           registryUsername: ${{ secrets.MEETINGBOT_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.MEETINGBOT_REGISTRY_PASSWORD }}
-          containerAppName: meeting-bot
-          resourceGroup: rg-container-prod
-          imageToBuild: meeting-bot:${{ github.sha }}
+          
+          # Pass the dynamic variables to the deployment step
+          containerAppName: ${{ env.APP_NAME }}
+          resourceGroup: ${{ env.RG_NAME }}
+          imageToBuild: ${{ env.APP_NAME }}:${{ github.sha }}

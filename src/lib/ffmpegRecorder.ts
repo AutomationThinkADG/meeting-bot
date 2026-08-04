@@ -22,90 +22,157 @@ export class FFmpegRecorder {
   async start(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        const isWebmOutput = this.outputPath.toLowerCase().endsWith('.webm');
-        const encodingArgs = isWebmOutput ? [
-          // WebM should use VP9 video and Opus audio.
-          '-c:v', 'libvpx-vp9',
-          '-deadline', 'realtime',
-          '-cpu-used', '4',
-          '-pix_fmt', 'yuv420p',
-          '-crf', '33',
-          '-b:v', '0',
-          '-g', '50', // Keyframe interval
-          '-threads', '0',
+        const ext = this.outputPath.toLowerCase();
+        const isWebm = ext.endsWith('.webm');
+        const isMp3 = ext.endsWith('.mp3');
+        const isWav = ext.endsWith('.wav');
+        const isAudioOnly = isMp3 || isWav;
 
-          // Audio encoding
-          '-c:a', 'libopus',
-          '-b:a', '128k',
-          '-ar', '48000',
-          '-ac', '2',
-        ] : [
-          // MP4-compatible video encoding
-          '-c:v', 'libx264',
-          '-preset', 'faster',
-          '-pix_fmt', 'yuv420p',
-          '-crf', '23',
-          '-g', '50', // Keyframe interval
-          '-threads', '0',
+        let encodingArgs: string[] = [];
 
-          // Audio encoding
-          '-c:a', 'aac',
-          '-b:a', '128k',
-          '-ar', '44100',
-          '-ac', '2',
-          '-strict', 'experimental',
+        if (isMp3) {
+          // ULTRA-LIGHT AUDIO ONLY: 32kbps, Mono, 16kHz MP3 (Perfect for Azure Speech)
+          encodingArgs = [
+            '-c:a',
+            'libmp3lame',
+            '-b:a',
+            '32k',
+            '-ac',
+            '1',
+            '-ar',
+            '16000',
+          ];
+        } else if (isWav) {
+          // WAV AUDIO ONLY: 16-bit PCM, Mono, 16kHz
+          encodingArgs = ['-c:a', 'pcm_s16le', '-ac', '1', '-ar', '16000'];
+        } else if (isWebm) {
+          // Existing WebM video encoding
+          encodingArgs = [
+            '-c:v',
+            'libvpx-vp9',
+            '-deadline',
+            'realtime',
+            '-cpu-used',
+            '4',
+            '-pix_fmt',
+            'yuv420p',
+            '-crf',
+            '33',
+            '-b:v',
+            '0',
+            '-g',
+            '50', // Keyframe interval
+            '-threads',
+            '0',
+            '-c:a',
+            'libopus',
+            '-b:a',
+            '128k',
+            '-ar',
+            '48000',
+            '-ac',
+            '2',
+          ];
+        } else {
+          // MP4-compatible video encoding fallback
+          encodingArgs = [
+            '-c:v',
+            'libx264',
+            '-preset',
+            'faster',
+            '-pix_fmt',
+            'yuv420p',
+            '-crf',
+            '23',
+            '-g',
+            '50', // Keyframe interval
+            '-threads',
+            '0',
+            '-c:a',
+            'aac',
+            '-b:a',
+            '128k',
+            '-ar',
+            '44100',
+            '-ac',
+            '2',
+            '-strict',
+            'experimental',
+            '-movflags',
+            '+faststart',
+          ];
+        }
 
-          // MP4 optimization
-          '-movflags', '+faststart',
-        ];
+        // Only include X11 screen capture if we actually want video
+        const videoInputArgs = isAudioOnly
+          ? []
+          : [
+              '-f',
+              'x11grab',
+              '-video_size',
+              '1280x720',
+              '-framerate',
+              '25',
+              '-draw_mouse',
+              '0',
+              '-i',
+              `${process.env.DISPLAY || ':99'}+0,80`, // +0,80 = X offset 0, Y offset 80
+            ];
 
-        // FFmpeg command to capture X11 display and PulseAudio monitor
+        // Combine all FFmpeg arguments
         const ffmpegArgs = [
           '-y', // Overwrite output file
-          '-loglevel', 'info', // Verbose logging for debugging
+          '-loglevel',
+          'info', // Verbose logging for debugging
 
-          // Video input from X11 display (with Y offset to skip address bar)
-          '-f', 'x11grab',
-          '-video_size', '1280x720',
-          '-framerate', '25',
-          '-draw_mouse', '0',
-          '-i', `${process.env.DISPLAY || ':99'}+0,80`,  // +0,80 = X offset 0, Y offset 80 (skip address bar)
+          ...videoInputArgs,
 
           // Audio input from PulseAudio monitor
-          '-f', 'pulse',
-          '-ac', '2',
-          '-ar', '44100',
-          '-i', 'virtual_output.monitor',
+          '-f',
+          'pulse',
+          '-ac',
+          '2',
+          '-ar',
+          '44100',
+          '-i',
+          'virtual_output.monitor',
+
+          // Explicitly drop video stream if we are doing audio only
+          ...(isAudioOnly ? ['-vn'] : []),
 
           ...encodingArgs,
 
           // Sync and timing
-          '-vsync', 'cfr',
-          '-async', '1',
+          '-vsync',
+          'cfr',
+          '-async',
+          '1',
 
           // Output
-          this.outputPath
+          this.outputPath,
         ];
 
-        this.logger.info('Starting ffmpeg with args:', { args: ffmpegArgs.join(' ') });
+        this.logger.info('Starting ffmpeg with args:', {
+          args: ffmpegArgs.join(' '),
+        });
 
         // Ensure FFmpeg can connect to PulseAudio
         const ffmpegEnv = {
           ...process.env,
           XDG_RUNTIME_DIR: process.env.XDG_RUNTIME_DIR || '/run/user/1001',
-          DISPLAY: process.env.DISPLAY || ':99'
+          DISPLAY: process.env.DISPLAY || ':99',
         };
 
         this.logger.info('FFmpeg environment:', {
           XDG_RUNTIME_DIR: ffmpegEnv.XDG_RUNTIME_DIR,
           DISPLAY: ffmpegEnv.DISPLAY,
           USER: process.env.USER,
-          HOME: process.env.HOME
+          HOME: process.env.HOME,
         });
 
         this.ffmpegProcess = spawn('ffmpeg', ffmpegArgs, {
-          stdio: ['pipe', 'pipe', 'pipe'],  // Enable stdin to send 'q' quit signal
-          env: ffmpegEnv
+          stdio: ['pipe', 'pipe', 'pipe'], // Enable stdin to send 'q' quit signal
+          env: ffmpegEnv,
         });
 
         // Handle stdout
@@ -122,16 +189,29 @@ export class FFmpegRecorder {
           const output = data.toString();
           stderrBuffer += output;
 
-          const isStartupPhase = (Date.now() - startTime) < 5000; // First 5 seconds
+          const isStartupPhase = Date.now() - startTime < 5000; // First 5 seconds
 
           // Log errors and important messages
-          if (output.includes('error') || output.includes('Error') || output.includes('Invalid') || output.includes('Failed')) {
+          if (
+            output.includes('error') ||
+            output.includes('Error') ||
+            output.includes('Invalid') ||
+            output.includes('Failed')
+          ) {
             this.logger.error('ffmpeg error:', output);
-          } else if (output.includes('Duration') || output.includes('Stream #') || output.includes('video:') || output.includes('audio:')) {
+          } else if (
+            output.includes('Duration') ||
+            output.includes('Stream #') ||
+            output.includes('video:') ||
+            output.includes('audio:')
+          ) {
             this.logger.info('ffmpeg info:', output.trim());
           } else if (isStartupPhase) {
             // Log all stderr at info level during startup (first 5 seconds) to catch initialization errors
-            this.logger.info('ffmpeg startup:', output.trim().substring(0, 200));
+            this.logger.info(
+              'ffmpeg startup:',
+              output.trim().substring(0, 200),
+            );
           } else {
             // After startup, only debug log progress updates
             this.logger.debug('ffmpeg progress:', output.substring(0, 150));
@@ -157,14 +237,22 @@ export class FFmpegRecorder {
             if (trimmedBuffer) {
               this.logger.error('FFmpeg stderr output:', trimmedBuffer);
             } else {
-              this.logger.error('FFmpeg stderr was empty - process may have crashed without error message');
-              this.logger.error('Common causes: screen size mismatch (check Xvfb resolution vs capture area + offset), PulseAudio not running, X11 display not available');
+              this.logger.error(
+                'FFmpeg stderr was empty - process may have crashed without error message',
+              );
+              this.logger.error(
+                'Common causes: screen size mismatch (check Xvfb resolution vs capture area + offset), PulseAudio not running, X11 display not available',
+              );
             }
 
             // If we haven't settled yet (early failure during startup), reject
             if (!settled) {
               settled = true;
-              reject(new Error(`FFmpeg exited with code ${code}: ${trimmedBuffer || 'no error details'}`));
+              reject(
+                new Error(
+                  `FFmpeg exited with code ${code}: ${trimmedBuffer || 'no error details'}`,
+                ),
+              );
             }
           }
         });
@@ -185,7 +273,11 @@ export class FFmpegRecorder {
             return;
           }
 
-          if (this.ffmpegProcess && !this.ffmpegProcess.killed && this.ffmpegProcess.exitCode === null) {
+          if (
+            this.ffmpegProcess &&
+            !this.ffmpegProcess.killed &&
+            this.ffmpegProcess.exitCode === null
+          ) {
             this.logger.info('ffmpeg recording started successfully');
             settled = true;
             resolve();
@@ -195,7 +287,6 @@ export class FFmpegRecorder {
             reject(new Error('ffmpeg failed to start'));
           }
         }, 1000);
-
       } catch (error) {
         this.logger.error('Error starting ffmpeg:', error);
         reject(error);
@@ -248,7 +339,10 @@ export class FFmpegRecorder {
       this.ffmpegProcess.on('exit', (code, signal) => {
         if (!resolved) {
           clearTimeout(timeout);
-          this.logger.info('ffmpeg process exited gracefully', { code, signal });
+          this.logger.info('ffmpeg process exited gracefully', {
+            code,
+            signal,
+          });
           this.ffmpegProcess = null;
           resolved = true;
           resolve();
