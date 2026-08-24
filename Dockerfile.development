@@ -71,4 +71,4 @@ RUN chmod +x /usr/src/app/start.sh
 
 EXPOSE 3000
 
-CMD ["node", "dist/index.js"]
+CMD ["./start.sh"]
