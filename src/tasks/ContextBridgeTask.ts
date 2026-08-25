@@ -32,15 +32,14 @@ export class ContextBridgeTask extends Task<null, void> {
     this.page?.on('console', async (msg) => {
       try {
         await browserLogCaptureCallback(this._logger, msg);
-      } catch (err) {
+      } catch (err: any) {
         this._logger.info('Failed to log browser messages...', err?.message);
       }
     });
 
     // 1. Setup tracking variables
     const blockIds: string[] = [];
-    const blobKey = `meetings/${this.teamId}/${this.userId}-recording.webm`; // Adjust path as needed
-
+    const blobKey = `meetings/${this.slightlySecretId}-recording.webm`;
     await this.page.exposeFunction(
       'screenAppSendData',
       async (slightlySecretId: string, data: string) => {

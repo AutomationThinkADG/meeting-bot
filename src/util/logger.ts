@@ -2,7 +2,7 @@ import { ConsoleMessage } from 'playwright';
 import { createLogger, format, transports, Logger } from 'winston';
 import { v5 as uuidv5, v4 } from 'uuid';
 
-const NAMESPACE = uuidv5.DNS; 
+const NAMESPACE = uuidv5.DNS;
 
 export function loggerFactory(correlationId: string, botType?: string): Logger {
   return createLogger({
@@ -15,17 +15,22 @@ export function loggerFactory(correlationId: string, botType?: string): Logger {
         }
         return info;
       })(),
-      format.printf(({ timestamp, level, message, correlationId, botType, ...meta }) => {
-        const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
-        const botTypeStr = botType ? ` [botType: ${botType}]` : '';
-        return `[${timestamp}] [${level}] [correlationId: ${correlationId}]${botTypeStr} ${message} ${metaStr}`;
-      }),
+      format.printf(
+        ({ timestamp, level, message, correlationId, botType, ...meta }) => {
+          const metaStr = Object.keys(meta).length ? JSON.stringify(meta) : '';
+          const botTypeStr = botType ? ` [botType: ${botType}]` : '';
+          return `[${timestamp}] [${level}] [correlationId: ${correlationId}]${botTypeStr} ${message} ${metaStr}`;
+        },
+      ),
     ),
     transports: [new transports.Console()],
   });
 }
 
-export const browserLogCaptureCallback = async (logger: Logger, msg: ConsoleMessage) => {
+export const browserLogCaptureCallback = async (
+  logger: Logger,
+  msg: ConsoleMessage,
+) => {
   try {
     const values: unknown[] = [];
     for (const arg of msg?.args()) {
@@ -46,7 +51,7 @@ export const browserLogCaptureCallback = async (logger: Logger, msg: ConsoleMess
         logger.info(`[Playwright chrome logger] ${msg.text()}`, ...values);
         break;
     }
-  } catch(err) {
+  } catch (err: any) {
     logger.info('Failed to log browser messages...', err?.message);
   }
 };
@@ -56,13 +61,13 @@ export const createCorrelationId = ({
   eventId,
   botId,
   url,
-  teamId
+  teamId,
 }: {
-  userId: string,
-  eventId: string | undefined,
-  botId: string | undefined,
-  url: string,
-  teamId: string
+  userId: string;
+  eventId: string | undefined;
+  botId: string | undefined;
+  url: string;
+  teamId: string;
 }): string => {
   try {
     const entityId = botId ?? eventId;
@@ -75,11 +80,15 @@ export const createCorrelationId = ({
       botId,
       url,
       teamId,
-      method: 'v5'
+      method: 'v5',
     });
     return id;
-  } catch(err) {
-    console.error('Unable to create deterministic correlationId', { userId, teamId, err });
+  } catch (err) {
+    console.error('Unable to create deterministic correlationId', {
+      userId,
+      teamId,
+      err,
+    });
     const id = v4();
     console.log(`[correlationId:${id}]`, {
       correlationId: id,
@@ -88,7 +97,7 @@ export const createCorrelationId = ({
       botId,
       url,
       teamId,
-      method: 'v4'
+      method: 'v4',
     });
     return id;
   }
@@ -96,7 +105,7 @@ export const createCorrelationId = ({
 
 export const getErrorType = (error: unknown): string => {
   if (!error) return 'Unknown';
-  
+
   if (error instanceof Error) {
     // Handle KnownError and its subclasses
     if (error.constructor.name === 'WaitingAtLobbyError') {
@@ -114,19 +123,25 @@ export const getErrorType = (error: unknown): string => {
     if (error.constructor.name === 'KnownError') {
       return 'KnownError';
     }
-    
+
     // Handle other common error types
-    if (error.name === 'AxiosError' || error.constructor.name === 'AxiosError') {
+    if (
+      error.name === 'AxiosError' ||
+      error.constructor.name === 'AxiosError'
+    ) {
       return 'AxiosError';
     }
-    if (error.name === 'TimeoutError' || error.constructor.name === 'TimeoutError') {
+    if (
+      error.name === 'TimeoutError' ||
+      error.constructor.name === 'TimeoutError'
+    ) {
       return 'TimeoutError';
     }
-    
+
     // Return the constructor name for other Error instances
     return error.constructor.name || error.name || 'UnknownError';
   }
-  
+
   return 'Unknown';
 };
 
