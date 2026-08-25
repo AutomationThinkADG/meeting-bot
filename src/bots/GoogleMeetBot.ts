@@ -663,26 +663,43 @@ export class GoogleMeetBot extends MeetBotBase {
       }
     });
 
+// 1. Setup tracking variables
+    const blockIds: string[] = [];
+    const blobKey = `meetings/${this.teamId}/${this.userId}-recording.webm`; // Adjust path as needed
+
     await this.page.exposeFunction('screenAppSendData', async (slightlySecretId: string, data: string) => {
       if (slightlySecretId !== this.slightlySecretId) return;
 
       const buffer = Buffer.from(data, 'base64');
-      await uploader.saveDataToTempFile(buffer);
+      
+      // 2. Generate exact-length Base64 block ID
+      const rawId = crypto.randomUUID().replace(/-/g, '');
+      const blockId = Buffer.from(rawId).toString('base64');
+      blockIds.push(blockId);
+
+      // 3. Stage the chunk (Bypassing temp file)
+      await uploader.stageChunk(blobKey, blockId, buffer, this._logger);
     });
 
-    await this.page.exposeFunction('screenAppMeetEnd', (slightlySecretId: string, recordedDurationSeconds?: number) => {
+    // Make sure to add 'async' here so we can await the commit!
+    await this.page.exposeFunction('screenAppMeetEnd', async (slightlySecretId: string, recordedDurationSeconds?: number) => {
       if (slightlySecretId !== this.slightlySecretId) return;
       try {
         if (typeof recordedDurationSeconds === 'number') {
           uploader.setRecordingDuration(recordedDurationSeconds);
         }
+        
+        // 4. Commit all chunks to Azure before resolving
+        this._logger.info('Stitching chunks in Azure...');
+        await uploader.commitChunks(blobKey, blockIds, 'audio/webm;codecs=opus', this._logger);
+        
         this._logger.info('Attempt to end meeting early...');
         waitingPromise.resolveEarly();
       } catch (error) {
         console.error('Could not process meeting end event', error);
       }
     });
-
+    
     const { mimeTypes } = getRecordingMimeTypesForExtension(config.uploaderFileExtension);
 
     // Inject the MediaRecorder code into the browser context using page.evaluate

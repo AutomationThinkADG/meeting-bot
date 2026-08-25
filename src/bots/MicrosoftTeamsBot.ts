@@ -432,9 +432,13 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       // Monitor FFmpeg process - if it dies, stop recording immediately
       recorder.onProcessExit((code) => {
         if (code !== 0 && code !== null) {
-          this._logger.error('FFmpeg died unexpectedly during recording', { exitCode: code });
+          this._logger.error('FFmpeg died unexpectedly during recording', {
+            exitCode: code,
+          });
           ffmpegFailed = true;
-          ffmpegError = new Error(`FFmpeg exited with code ${code} during recording`);
+          ffmpegError = new Error(
+            `FFmpeg exited with code ${code} during recording`,
+          );
         }
       });
 
@@ -445,11 +449,14 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       });
 
       // Capture and forward browser console logs to Node.js logger
-      this.page.on('console', async msg => {
+      this.page.on('console', async (msg) => {
         try {
           await browserLogCaptureCallback(this._logger, msg);
-        } catch(err) {
-          this._logger.info('Playwright chrome logger: Failed to log browser messages...', err instanceof Error ? err.message : String(err));
+        } catch (err) {
+          this._logger.info(
+            'Playwright chrome logger: Failed to log browser messages...',
+            err instanceof Error ? err.message : String(err),
+          );
         }
       });
 
@@ -459,13 +466,18 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
       const monitorAudioSilence = async () => {
         try {
-          this._logger.info('Starting audio silence detection for Microsoft Teams', {
-            inactivityLimitMs,
-            inactivityLimitMinutes: inactivityLimitMs / 60000
-          });
+          this._logger.info(
+            'Starting audio silence detection for Microsoft Teams',
+            {
+              inactivityLimitMs,
+              inactivityLimitMinutes: inactivityLimitMs / 60000,
+            },
+          );
           let consecutiveSilentChecks = 0;
           const checkIntervalSeconds = 5;
-          const checksNeeded = Math.ceil(inactivityLimitMs / 1000 / checkIntervalSeconds); // e.g., 120000ms / 1000 / 5 = 24 checks
+          const checksNeeded = Math.ceil(
+            inactivityLimitMs / 1000 / checkIntervalSeconds,
+          ); // e.g., 120000ms / 1000 / 5 = 24 checks
 
           const checkInterval = setInterval(async () => {
             // If the meeting ended via any other path (browser signal, page-state change,
@@ -480,37 +492,49 @@ export class MicrosoftTeamsBot extends MeetBotBase {
               // Use parec to capture 1 second of audio and check the peak level
               const { stdout } = await execAsync(
                 'timeout 1 parec --device=virtual_output.monitor --format=s16le --rate=16000 --channels=1 2>/dev/null | ' +
-                'od -An -td2 -v | awk \'BEGIN{max=0} {for(i=1;i<=NF;i++) {val=($i<0)?-$i:$i; if(val>max) max=val}} END{print max}\''
+                  'od -An -td2 -v | awk \'BEGIN{max=0} {for(i=1;i<=NF;i++) {val=($i<0)?-$i:$i; if(val>max) max=val}} END{print max}\'',
               );
 
               // Get peak audio level (0-32767 for 16-bit audio)
               const peakLevel = parseInt(stdout.trim()) || 0;
               const silenceThreshold = 200; // Adjust this threshold as needed
 
-              this._logger.debug('Audio level check', { peakLevel, threshold: silenceThreshold });
+              this._logger.debug('Audio level check', {
+                peakLevel,
+                threshold: silenceThreshold,
+              });
 
               // Check if audio is silent (low peak level)
               if (peakLevel < silenceThreshold) {
                 consecutiveSilentChecks++;
-                this._logger.info(`Silence detected: ${consecutiveSilentChecks}/${checksNeeded} checks`, { peakLevel });
+                this._logger.info(
+                  `Silence detected: ${consecutiveSilentChecks}/${checksNeeded} checks`,
+                  { peakLevel },
+                );
 
                 if (consecutiveSilentChecks >= checksNeeded) {
-                  this._logger.warn('Audio silence threshold reached, ending Microsoft Teams meeting', {
-                    userId,
-                    teamId,
-                    silenceDurationMs: inactivityLimitMs,
-                    silenceDurationMinutes: inactivityLimitMs / 60000,
-                    finalPeakLevel: peakLevel,
-                    checksNeeded,
-                    checksDetected: consecutiveSilentChecks
-                  });
+                  this._logger.warn(
+                    'Audio silence threshold reached, ending Microsoft Teams meeting',
+                    {
+                      userId,
+                      teamId,
+                      silenceDurationMs: inactivityLimitMs,
+                      silenceDurationMinutes: inactivityLimitMs / 60000,
+                      finalPeakLevel: peakLevel,
+                      checksNeeded,
+                      checksDetected: consecutiveSilentChecks,
+                    },
+                  );
                   clearInterval(checkInterval);
                   meetingEnded = true;
                 }
               } else {
                 // Reset counter if we detect audio
                 if (consecutiveSilentChecks > 0) {
-                  this._logger.info('Audio detected, resetting silence counter', { peakLevel });
+                  this._logger.info(
+                    'Audio detected, resetting silence counter',
+                    { peakLevel },
+                  );
                 }
                 consecutiveSilentChecks = 0;
               }
@@ -519,27 +543,44 @@ export class MicrosoftTeamsBot extends MeetBotBase {
               // Don't fail the entire detection on a single error
             }
           }, 5000); // Check every 5 seconds
-
         } catch (error) {
-          this._logger.error('Failed to initialize audio silence detection:', error);
+          this._logger.error(
+            'Failed to initialize audio silence detection:',
+            error,
+          );
           this._logger.warn('Will rely on participant detection only');
         }
       };
 
       // Start silence monitoring after delay
-      setTimeout(() => {
-        monitorAudioSilence();
-      }, config.activateInactivityDetectionAfter * 60 * 1000);
+      setTimeout(
+        () => {
+          monitorAudioSilence();
+        },
+        config.activateInactivityDetectionAfter * 60 * 1000,
+      );
 
       // Inject inactivity detection script
       await this.page.evaluate(
-        ({ activateAfterMinutes, loneParticipantExitDelayMs, maxDuration }: { activateAfterMinutes: number, loneParticipantExitDelayMs: number, maxDuration: number }) => {
+        ({
+          activateAfterMinutes,
+          loneParticipantExitDelayMs,
+          maxDuration,
+        }: {
+          activateAfterMinutes: number;
+          loneParticipantExitDelayMs: number;
+          maxDuration: number;
+        }) => {
           // Max duration timeout - safety limit (3 hours default in production)
           setTimeout(() => {
-            console.log(`Max recording duration (${maxDuration / 60000} minutes) reached, ending meeting`);
+            console.log(
+              `Max recording duration (${maxDuration / 60000} minutes) reached, ending meeting`,
+            );
             (window as any).screenAppMeetEnd();
           }, maxDuration);
-          console.log(`Max duration timeout set to ${maxDuration / 60000} minutes (safety limit)`);
+          console.log(
+            `Max duration timeout set to ${maxDuration / 60000} minutes (safety limit)`,
+          );
 
           console.log('Activating participant count detection...');
 
@@ -560,7 +601,9 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             if (hasSeenOtherParticipant) {
               if (aloneSince === null) {
                 aloneSince = now;
-                console.log('Bot is alone after previously seeing participants; waiting before ending recording.');
+                console.log(
+                  'Bot is alone after previously seeing participants; waiting before ending recording.',
+                );
               }
               return now - aloneSince >= loneParticipantExitDelayMs;
             }
@@ -568,7 +611,8 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             return now - recordingStartedAt >= initialAloneGraceMs;
           };
 
-          const normalizeText = (text: string) => text.replace(/\s+/g, ' ').trim();
+          const normalizeText = (text: string) =>
+            text.replace(/\s+/g, ' ').trim();
 
           const parseParticipantCount = (text: string): number | undefined => {
             const normalized = normalizeText(text);
@@ -605,10 +649,14 @@ export class MicrosoftTeamsBot extends MeetBotBase {
               /\b(?:keine|niemand)\D{0,80}(?:teilnehm(?:er|ende)?|personen|hier|besprechung|anruf)\b/i,
             ];
 
-            return emptyMeetingPatterns.some(pattern => pattern.test(text));
+            return emptyMeetingPatterns.some((pattern) => pattern.test(text));
           };
 
-          const getTeamsMeetingState = (): 'active' | 'alone' | 'empty' | 'ended' => {
+          const getTeamsMeetingState = ():
+            | 'active'
+            | 'alone'
+            | 'empty'
+            | 'ended' => {
             const bodyText = normalizeText(document.body.innerText || '');
 
             const endedPhrases = [
@@ -625,7 +673,11 @@ export class MicrosoftTeamsBot extends MeetBotBase {
               'du wurdest entfernt',
             ];
 
-            if (endedPhrases.some(phrase => bodyText.toLowerCase().includes(phrase))) {
+            if (
+              endedPhrases.some((phrase) =>
+                bodyText.toLowerCase().includes(phrase),
+              )
+            ) {
               return 'ended';
             }
 
@@ -634,11 +686,11 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             }
 
             const alonePhrases = [
-              "you're the only one here",
-              "you’re the only one here",
+              'you\'re the only one here',
+              'you’re the only one here',
               'you are the only one here',
-              "you're the only one in this meeting",
-              "you’re the only one in this meeting",
+              'you\'re the only one in this meeting',
+              'you’re the only one in this meeting',
               'you are the only one in this meeting',
               'only one in this meeting',
               'only you are here',
@@ -651,10 +703,17 @@ export class MicrosoftTeamsBot extends MeetBotBase {
               'warten auf andere',
             ];
 
-            return alonePhrases.some(phrase => bodyText.toLowerCase().includes(phrase)) ? 'alone' : 'active';
+            return alonePhrases.some((phrase) =>
+              bodyText.toLowerCase().includes(phrase),
+            )
+              ? 'alone'
+              : 'active';
           };
 
-          const getParticipantCount = (): { count?: number; samples: string[] } => {
+          const getParticipantCount = (): {
+            count?: number;
+            samples: string[];
+          } => {
             const selectors = [
               'button[data-tid*="roster" i]',
               '[data-tid*="roster" i]',
@@ -670,7 +729,9 @@ export class MicrosoftTeamsBot extends MeetBotBase {
               '[aria-label*="personen" i]',
             ];
 
-            const candidates = Array.from(document.querySelectorAll(selectors.join(',')));
+            const candidates = Array.from(
+              document.querySelectorAll(selectors.join(',')),
+            );
             const samples: string[] = [];
 
             for (const element of candidates) {
@@ -681,12 +742,14 @@ export class MicrosoftTeamsBot extends MeetBotBase {
               ].filter(Boolean) as Element[];
 
               for (const root of searchRoots) {
-                const text = normalizeText([
-                  root.getAttribute('aria-label') ?? '',
-                  root.getAttribute('title') ?? '',
-                  root.getAttribute('data-tid') ?? '',
-                  root.textContent ?? '',
-                ].join(' '));
+                const text = normalizeText(
+                  [
+                    root.getAttribute('aria-label') ?? '',
+                    root.getAttribute('title') ?? '',
+                    root.getAttribute('data-tid') ?? '',
+                    root.textContent ?? '',
+                  ].join(' '),
+                );
 
                 if (!text) continue;
                 if (samples.length < 6) {
@@ -703,10 +766,13 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             const bodyLines = (document.body.innerText || '')
               .split(/\n+/)
               .map(normalizeText)
-              .filter(text => (
-                text.length > 0 &&
-                /(?:people|participants?|teilnehm|personen|meeting|call|besprechung|anruf)/i.test(text)
-              ));
+              .filter(
+                (text) =>
+                  text.length > 0 &&
+                  /(?:people|participants?|teilnehm|personen|meeting|call|besprechung|anruf)/i.test(
+                    text,
+                  ),
+              );
 
             for (const text of bodyLines) {
               if (samples.length < 6) {
@@ -732,7 +798,9 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             try {
               const meetingState = getTeamsMeetingState();
               if (meetingState === 'ended') {
-                console.log('Teams meeting ended page state detected, ending recording.');
+                console.log(
+                  'Teams meeting ended page state detected, ending recording.',
+                );
                 clearInterval(interval);
                 (window as any).screenAppMeetEnd();
                 return;
@@ -751,7 +819,9 @@ export class MicrosoftTeamsBot extends MeetBotBase {
               if (typeof inferredCount !== 'number') {
                 const now = Date.now();
                 if (now - lastParticipantDetectionLogAt > 30000) {
-                  console.log('Teams participant count not detected yet', { samples });
+                  console.log('Teams participant count not detected yet', {
+                    samples,
+                  });
                   lastParticipantDetectionLogAt = now;
                 }
                 return;
@@ -761,7 +831,10 @@ export class MicrosoftTeamsBot extends MeetBotBase {
                 return;
               }
 
-              console.log('Bot is alone, ending Teams recording', { inferredCount, meetingState });
+              console.log('Bot is alone, ending Teams recording', {
+                inferredCount,
+                meetingState,
+              });
               clearInterval(interval);
               (window as any).screenAppMeetEnd();
             } catch (error) {
@@ -771,27 +844,31 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         },
         {
           activateAfterMinutes: config.activateInactivityDetectionAfter,
-          loneParticipantExitDelayMs: config.loneParticipantExitDelaySeconds * 1000,
+          loneParticipantExitDelayMs:
+            config.loneParticipantExitDelaySeconds * 1000,
           maxDuration: duration,
-        }
+        },
       );
 
       // Wait for either timeout, meeting end, or FFmpeg failure
-      while (!meetingEnded && !ffmpegFailed && (Date.now() - startedAt) < duration) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      while (
+        !meetingEnded &&
+        !ffmpegFailed &&
+        Date.now() - startedAt < duration
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
       this._logger.info('Recording period ended', {
         meetingEnded,
         ffmpegFailed,
-        recordedDuration: Math.floor((Date.now() - startedAt) / 1000) + 's'
+        recordedDuration: Math.floor((Date.now() - startedAt) / 1000) + 's',
       });
 
       // If FFmpeg failed during recording, throw the error
       if (ffmpegFailed && ffmpegError) {
         throw ffmpegError;
       }
-
     } catch (error) {
       // If recorder.start() failed or any other error occurred, mark FFmpeg as failed
       this._logger.error('Error during recording:', error);

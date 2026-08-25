@@ -14,18 +14,22 @@ import { DefaultAzureCredential } from '@azure/identity';
 export class AzureBlobStorageProvider implements StorageProvider {
   readonly name = 'azure' as const;
 
-  private parseConnectionString(connectionString?: string): Record<string, string> {
+  private parseConnectionString(
+    connectionString?: string,
+  ): Record<string, string> {
     if (!connectionString) return {};
 
-    return connectionString.split(';').reduce<Record<string, string>>((parts, part) => {
-      const separatorIndex = part.indexOf('=');
-      if (separatorIndex <= 0) return parts;
+    return connectionString
+      .split(';')
+      .reduce<Record<string, string>>((parts, part) => {
+        const separatorIndex = part.indexOf('=');
+        if (separatorIndex <= 0) return parts;
 
-      const key = part.slice(0, separatorIndex);
-      const value = part.slice(separatorIndex + 1);
-      if (key && value) parts[key] = value;
-      return parts;
-    }, {});
+        const key = part.slice(0, separatorIndex);
+        const value = part.slice(separatorIndex + 1);
+        if (key && value) parts[key] = value;
+        return parts;
+      }, {});
   }
 
   private appendSasToken(baseUrl: string, sasToken: string): string {
@@ -39,20 +43,35 @@ export class AzureBlobStorageProvider implements StorageProvider {
     let serviceClient: BlobServiceClient;
 
     if (cfg.connectionString) {
-      serviceClient = BlobServiceClient.fromConnectionString(cfg.connectionString);
+      serviceClient = BlobServiceClient.fromConnectionString(
+        cfg.connectionString,
+      );
     } else if (cfg.accountName && cfg.sasToken) {
       // SAS token must start with ?; if not, add it
-      const sas = cfg.sasToken.startsWith('?') ? cfg.sasToken : `?${cfg.sasToken}`;
+      const sas = cfg.sasToken.startsWith('?')
+        ? cfg.sasToken
+        : `?${cfg.sasToken}`;
       const url = `https://${cfg.accountName}.blob.core.windows.net${sas}`;
       serviceClient = new BlobServiceClient(url);
     } else if (cfg.accountName && cfg.accountKey) {
-      const cred = new StorageSharedKeyCredential(cfg.accountName, cfg.accountKey);
-      serviceClient = new BlobServiceClient(`https://${cfg.accountName}.blob.core.windows.net`, cred);
+      const cred = new StorageSharedKeyCredential(
+        cfg.accountName,
+        cfg.accountKey,
+      );
+      serviceClient = new BlobServiceClient(
+        `https://${cfg.accountName}.blob.core.windows.net`,
+        cred,
+      );
     } else if (cfg.accountName && cfg.useManagedIdentity) {
       const cred = new DefaultAzureCredential();
-      serviceClient = new BlobServiceClient(`https://${cfg.accountName}.blob.core.windows.net`, cred);
+      serviceClient = new BlobServiceClient(
+        `https://${cfg.accountName}.blob.core.windows.net`,
+        cred,
+      );
     } else {
-      throw new Error('Azure Blob Storage configuration incomplete. Provide connection string OR (account+sas/account+key/managed identity).');
+      throw new Error(
+        'Azure Blob Storage configuration incomplete. Provide connection string OR (account+sas/account+key/managed identity).',
+      );
     }
 
     if (!cfg.container) {
@@ -77,10 +96,13 @@ export class AzureBlobStorageProvider implements StorageProvider {
       await blob.uploadFile(options.filePath, {
         blobHTTPHeaders: { blobContentType: options.contentType },
         metadata: options.metadata,
-        concurrency: options.concurrency ?? config.azureBlobStorage.uploadConcurrency ?? 4,
+        concurrency:
+          options.concurrency ?? config.azureBlobStorage.uploadConcurrency ?? 4,
         onProgress: (p: { loadedBytes?: number }) => {
           if (p.loadedBytes) {
-            options.logger.info(`Azure upload progress ${blobName}: ${p.loadedBytes} bytes`);
+            options.logger.info(
+              `Azure upload progress ${blobName}: ${p.loadedBytes} bytes`,
+            );
           }
         },
       });
@@ -92,29 +114,41 @@ export class AzureBlobStorageProvider implements StorageProvider {
     }
   }
 
-  async getSignedUrl(key: string, options?: { expiresInSeconds?: number; contentType?: string }): Promise<string> {
+  async getSignedUrl(
+    key: string,
+    options?: { expiresInSeconds?: number; contentType?: string },
+  ): Promise<string> {
     const container = this.getContainerClient();
     const blobName = key; // use key as-is
-    const expiresIn = options?.expiresInSeconds ?? config.azureBlobStorage.signedUrlTtlSeconds ?? 3600;
+    const expiresIn =
+      options?.expiresInSeconds ??
+      config.azureBlobStorage.signedUrlTtlSeconds ??
+      3600;
 
     // Determine credential type for SAS
     const cfg = config.azureBlobStorage;
-    const connectionStringParts = this.parseConnectionString(cfg.connectionString);
+    const connectionStringParts = this.parseConnectionString(
+      cfg.connectionString,
+    );
     const accountName = cfg.accountName || connectionStringParts.AccountName;
     const accountKey = cfg.accountKey || connectionStringParts.AccountKey;
-    const sasToken = cfg.sasToken || connectionStringParts.SharedAccessSignature;
+    const sasToken =
+      cfg.sasToken || connectionStringParts.SharedAccessSignature;
     const baseUrl = container.getBlockBlobClient(blobName).url.split('?')[0];
 
     if (accountName && accountKey) {
       const cred = new StorageSharedKeyCredential(accountName, accountKey);
-      const sas = generateBlobSASQueryParameters({
-        containerName: container.containerName,
-        blobName,
-        permissions: BlobSASPermissions.parse('r'),
-        startsOn: new Date(Date.now() - 5 * 60 * 1000),
-        expiresOn: new Date(Date.now() + expiresIn * 1000),
-        protocol: SASProtocol.Https,
-      }, cred).toString();
+      const sas = generateBlobSASQueryParameters(
+        {
+          containerName: container.containerName,
+          blobName,
+          permissions: BlobSASPermissions.parse('r'),
+          startsOn: new Date(Date.now() - 5 * 60 * 1000),
+          expiresOn: new Date(Date.now() + expiresIn * 1000),
+          protocol: SASProtocol.Https,
+        },
+        cred,
+      ).toString();
       return `${baseUrl}?${sas}`;
     }
 
@@ -126,22 +160,31 @@ export class AzureBlobStorageProvider implements StorageProvider {
     // Managed identity / AAD: create User Delegation SAS
     if (accountName && cfg.useManagedIdentity) {
       const cred = new DefaultAzureCredential();
-      const service = new BlobServiceClient(`https://${accountName}.blob.core.windows.net`, cred);
+      const service = new BlobServiceClient(
+        `https://${accountName}.blob.core.windows.net`,
+        cred,
+      );
       const startsOn = new Date(Date.now() - 5 * 60 * 1000);
       const expiresOn = new Date(Date.now() + expiresIn * 1000);
       const key = await service.getUserDelegationKey(startsOn, expiresOn);
-      const sas = generateBlobSASQueryParameters({
-        containerName: container.containerName,
-        blobName,
-        permissions: BlobSASPermissions.parse('r'),
-        startsOn,
-        expiresOn,
-        protocol: SASProtocol.Https,
-      }, key, accountName).toString();
+      const sas = generateBlobSASQueryParameters(
+        {
+          containerName: container.containerName,
+          blobName,
+          permissions: BlobSASPermissions.parse('r'),
+          startsOn,
+          expiresOn,
+          protocol: SASProtocol.Https,
+        },
+        key,
+        accountName,
+      ).toString();
       return `${baseUrl}?${sas}`;
     }
 
-    throw new Error('Unable to generate SAS URL: no suitable credentials available. Provide account key or enable managed identity, or provide a SAS token.');
+    throw new Error(
+      'Unable to generate SAS URL: no suitable credentials available. Provide account key or enable managed identity, or provide a SAS token.',
+    );
   }
 
   async exists(key: string): Promise<boolean> {
@@ -161,5 +204,50 @@ export class AzureBlobStorageProvider implements StorageProvider {
       names.push(blob.name);
     }
     return names;
+  }
+
+  /**
+   * Uploads a single chunk of memory directly to Azure without saving to disk.
+   */
+  async stageChunk(
+    key: string,
+    blockId: string,
+    chunk: Buffer,
+    logger: any,
+  ): Promise<void> {
+    const container = this.getContainerClient();
+    const blob: BlockBlobClient = container.getBlockBlobClient(key);
+
+    try {
+      await blob.stageBlock(blockId, chunk, chunk.byteLength);
+      // Optional: logger.info(`Staged block ${blockId} for ${key}`);
+    } catch (err) {
+      logger.error(`Failed to stage block for ${key}`, err as any);
+      throw err;
+    }
+  }
+
+  /**
+   * Commits all staged chunks into a single, playable file.
+   */
+  async commitChunks(
+    key: string,
+    blockIds: string[],
+    contentType: string,
+    logger: any,
+  ): Promise<void> {
+    const container = this.getContainerClient();
+    const blob: BlockBlobClient = container.getBlockBlobClient(key);
+
+    try {
+      logger.info(`Committing ${blockIds.length} blocks for ${key}`);
+      await blob.commitBlockList(blockIds, {
+        blobHTTPHeaders: { blobContentType: contentType },
+      });
+      logger.info(`Successfully finalized Azure upload for ${key}`);
+    } catch (err) {
+      logger.error(`Failed to commit blocks for ${key}`, err as any);
+      throw err;
+    }
   }
 }
