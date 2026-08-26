@@ -21,6 +21,14 @@ fi
 Xvfb "$DISPLAY" -screen 0 "${XVFB_SCREEN_SIZE}x24" -ac +extension RANDR >/tmp/xvfb.log 2>&1 &
 xvfb_pid="$!"
 
+# --- ADD THIS BLOCK ---
+echo "Waiting for Xvfb virtual monitor to be ready..."
+while [ ! -e "/tmp/.X11-unix/X${DISPLAY#*:}" ]; do
+  sleep 0.1
+done
+echo "✓ Xvfb is ready!"
+# ----------------------
+
 cat >/tmp/chrome-cdp-nginx.conf <<EOF
 pid /tmp/nginx.pid;
 error_log /dev/stderr warn;
