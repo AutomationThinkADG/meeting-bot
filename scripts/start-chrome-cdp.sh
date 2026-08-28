@@ -18,6 +18,10 @@ if command -v pulseaudio >/dev/null 2>&1; then
   pulseaudio --start --exit-idle-time=-1 || true
 fi
 
+echo "Cleaning up old X11 locks..."
+rm -f /tmp/.X99-lock
+rm -f "/tmp/.X11-unix/X${DISPLAY#*:}"
+
 Xvfb "$DISPLAY" -screen 0 "${XVFB_SCREEN_SIZE}x24" -ac +extension RANDR >/tmp/xvfb.log 2>&1 &
 xvfb_pid="$!"
 

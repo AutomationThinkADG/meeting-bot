@@ -63,32 +63,48 @@ export default {
   },
   authBaseUrlV2: process.env.AUTH_BASE_URL_V2 ?? 'http://localhost:8081/v2',
   // Unset MAX_RECORDING_DURATION_MINUTES to use default upper limit on duration
-  maxRecordingDuration: process.env.MAX_RECORDING_DURATION_MINUTES ?
-    Number(process.env.MAX_RECORDING_DURATION_MINUTES) :
-    180, // There's an upper limit on meeting duration 3 hours
+  maxRecordingDuration: process.env.MAX_RECORDING_DURATION_MINUTES
+    ? Number(process.env.MAX_RECORDING_DURATION_MINUTES)
+    : 180, // There's an upper limit on meeting duration 3 hours
   chromeExecutablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', // We use Google Chrome with Playwright for recording
   googleChromeCdpUrl: process.env.GOOGLE_CHROME_CDP_URL,
   googleChromeUserDataDir: process.env.GOOGLE_CHROME_USER_DATA_DIR,
   googleChromeStorageStatePath: process.env.GOOGLE_CHROME_STORAGE_STATE_PATH,
-  googleAnonymousJoinRequestAttempts: process.env.GOOGLE_ANONYMOUS_JOIN_REQUEST_ATTEMPTS ?
-    Number(process.env.GOOGLE_ANONYMOUS_JOIN_REQUEST_ATTEMPTS) :
-    10,
-  inactivityLimit: process.env.MEETING_INACTIVITY_MINUTES ? Number(process.env.MEETING_INACTIVITY_MINUTES) : 1,
-  activateInactivityDetectionAfter: process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES ? Number(process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES) :  1,
-  loneParticipantExitDelaySeconds: process.env.LONE_PARTICIPANT_EXIT_DELAY_SECONDS ? Number(process.env.LONE_PARTICIPANT_EXIT_DELAY_SECONDS) : 10,
+  googleAnonymousJoinRequestAttempts: process.env
+    .GOOGLE_ANONYMOUS_JOIN_REQUEST_ATTEMPTS
+    ? Number(process.env.GOOGLE_ANONYMOUS_JOIN_REQUEST_ATTEMPTS)
+    : 10,
+  inactivityLimit: process.env.MEETING_INACTIVITY_MINUTES
+    ? Number(process.env.MEETING_INACTIVITY_MINUTES)
+    : 1,
+  activateInactivityDetectionAfter: process.env
+    .INACTIVITY_DETECTION_START_DELAY_MINUTES
+    ? Number(process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES)
+    : 1,
+  loneParticipantExitDelaySeconds: process.env
+    .LONE_PARTICIPANT_EXIT_DELAY_SECONDS
+    ? Number(process.env.LONE_PARTICIPANT_EXIT_DELAY_SECONDS)
+    : 10,
   serviceKey: process.env.SCREENAPP_BACKEND_SERVICE_API_KEY,
-  joinWaitTime: process.env.JOIN_WAIT_TIME_MINUTES ? Number(process.env.JOIN_WAIT_TIME_MINUTES) : 10,
+  joinWaitTime: process.env.JOIN_WAIT_TIME_MINUTES
+    ? Number(process.env.JOIN_WAIT_TIME_MINUTES)
+    : 10,
   // Number of retries for transient errors (not applied to WaitingAtLobbyRetryError)
   retryCount: process.env.RETRY_COUNT ? Number(process.env.RETRY_COUNT) : 2,
   teamsPrewarmEnabled: process.env.TEAMS_PREWARM_ENABLED === 'true',
-  teamsAudioStabilizationMs: process.env.TEAMS_AUDIO_STABILIZATION_MS ? Number(process.env.TEAMS_AUDIO_STABILIZATION_MS) : 1000,
+  teamsAudioStabilizationMs: process.env.TEAMS_AUDIO_STABILIZATION_MS
+    ? Number(process.env.TEAMS_AUDIO_STABILIZATION_MS)
+    : 1000,
   miscStorageBucket: process.env.GCP_MISC_BUCKET,
-  miscStorageFolder: process.env.GCP_MISC_BUCKET_FOLDER ? process.env.GCP_MISC_BUCKET_FOLDER : 'meeting-bot',
+  miscStorageFolder: process.env.GCP_MISC_BUCKET_FOLDER
+    ? process.env.GCP_MISC_BUCKET_FOLDER
+    : 'meeting-bot',
   region: process.env.GCP_DEFAULT_REGION,
   accessKey: process.env.GCP_ACCESS_KEY_ID ?? '',
   accessSecret: process.env.GCP_SECRET_ACCESS_KEY ?? '',
   redisQueueName: process.env.REDIS_QUEUE_NAME ?? 'jobs:meetbot:list',
-  redisProcessingQueueName: process.env.REDIS_PROCESSING_QUEUE_NAME ?? 'jobs:meetbot:processing',
+  redisProcessingQueueName:
+    process.env.REDIS_PROCESSING_QUEUE_NAME ?? 'jobs:meetbot:processing',
   redisUri: constructRedisUri(),
   // Notification: Webhook (disabled by default)
   notifyWebhookEnabled: process.env.NOTIFY_WEBHOOK_ENABLED === 'true',
@@ -97,13 +113,18 @@ export default {
   notifyWebhookSecret: process.env.NOTIFY_WEBHOOK_SECRET,
   // Notification: Redis. Explicitly enabled via NOTIFY_REDIS_ENABLED, and enabled
   // automatically for Redis-worker mode so completed jobs are written to result list.
-  notifyRedisEnabled: process.env.NOTIFY_REDIS_ENABLED === 'true' || process.env.REDIS_CONSUMER_ENABLED === 'true',
+  notifyRedisEnabled:
+    process.env.NOTIFY_REDIS_ENABLED === 'true' ||
+    process.env.REDIS_CONSUMER_ENABLED === 'true',
   // If not provided, uses redisUri with specified database selection
   notifyRedisUri: process.env.NOTIFY_REDIS_URI, // optional override
   notifyRedisDb: parseOptionalNumber(process.env.NOTIFY_REDIS_DB),
   notifyRedisList: process.env.NOTIFY_REDIS_LIST ?? 'jobs:meetbot:recordings',
-  notifyRedisFailureList: process.env.NOTIFY_REDIS_FAILURE_LIST ?? 'jobs:meetbot:failures',
-  uploaderFileExtension: normalizeFileExtension(process.env.UPLOADER_FILE_EXTENSION),
+  notifyRedisFailureList:
+    process.env.NOTIFY_REDIS_FAILURE_LIST ?? 'jobs:meetbot:failures',
+  uploaderFileExtension: normalizeFileExtension(
+    process.env.UPLOADER_FILE_EXTENSION,
+  ),
   isRedisEnabled: process.env.REDIS_CONSUMER_ENABLED === 'true',
   s3CompatibleStorage: {
     endpoint: process.env.S3_ENDPOINT,
@@ -114,7 +135,9 @@ export default {
     forcePathStyle: process.env.S3_USE_MINIO_COMPATIBILITY === 'true',
   },
   // Object storage provider selection: 's3' (default) or 'azure'
-  storageProvider: (process.env.STORAGE_PROVIDER === 'azure' ? 'azure' : 's3') as 's3' | 'azure',
+  storageProvider: (process.env.STORAGE_PROVIDER === 'azure'
+    ? 'azure'
+    : 's3') as 's3' | 'azure',
   azureBlobStorage: {
     // Either provide full connection string OR account + key/SAS OR managed identity
     connectionString: process.env.AZURE_STORAGE_CONNECTION_STRING,
@@ -124,8 +147,22 @@ export default {
     useManagedIdentity: process.env.AZURE_USE_MANAGED_IDENTITY === 'true',
     container: process.env.AZURE_STORAGE_CONTAINER,
     blobPrefix: process.env.AZURE_BLOB_PREFIX || '',
-    signedUrlTtlSeconds: process.env.AZURE_SIGNED_URL_TTL_SECONDS ? Number(process.env.AZURE_SIGNED_URL_TTL_SECONDS) : 3600,
-    uploadConcurrency: process.env.AZURE_UPLOAD_CONCURRENCY ? Number(process.env.AZURE_UPLOAD_CONCURRENCY) : 4,
+    signedUrlTtlSeconds: process.env.AZURE_SIGNED_URL_TTL_SECONDS
+      ? Number(process.env.AZURE_SIGNED_URL_TTL_SECONDS)
+      : 3600,
+    uploadConcurrency: process.env.AZURE_UPLOAD_CONCURRENCY
+      ? Number(process.env.AZURE_UPLOAD_CONCURRENCY)
+      : 4,
   },
-  uploaderType: process.env.UPLOADER_TYPE ? (process.env.UPLOADER_TYPE as UploaderType) : 's3' as UploaderType,
+  uploaderType: process.env.UPLOADER_TYPE
+    ? (process.env.UPLOADER_TYPE as UploaderType)
+    : ('s3' as UploaderType),
+  // inside your config setup
+  // Inside your config file
+  teamsSpeakerIndicator:
+    process.env.TEAMS_SPEAKER_INDICATOR ||
+    '[data-tid="voice-level-stream-outline"][data-is-speaking="true"]',
+  teamsTileWrapper:
+    process.env.TEAMS_TILE_WRAPPER ||
+    '[data-tid^="calling-participant-stream"]',
 };
