@@ -198,3 +198,62 @@ export type LogCategory = typeof logCategories[number]['category'];
 export type LogSubCategory<C extends LogCategory> = (typeof logCategories[number] & { category: C })['subCategory'][number];
 
 export type UploaderType = 'screenapp' | 's3';
+
+// ---------------------------------------------------------------------------
+// Speaker attribution (see docs/SPEAKER_ATTRIBUTION.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * Source-agnostic "who was speaking when" span. Every capture strategy
+ * (Teams captions, voice-level outline, roster) emits these; the API fuses
+ * them against Azure Speech diarization + the known attendee roster.
+ *
+ * Timestamps are seconds from RECORDING start (the same clock as the ffmpeg
+ * recording and Azure `offsetInTicks / 1e7`). A one-off clock-skew correction
+ * happens on the API side, so small offsets here are expected and fine.
+ */
+export interface SpeakerSpan {
+  tStartSec: number;
+  tEndSec: number | null; // null => still open when the meeting ended
+  name: string | null; // display name when the source knows it
+  source: SpeakerSignalSource;
+  confidence: number; // 0..1, best-effort
+}
+
+export type SpeakerSignalSource =
+  | 'teams-caption'
+  | 'teams-outline'
+  | 'teams-roster-solo'
+  | 'meet-caption'
+  | 'zoom-tile';
+
+/** One finalized live-caption line. `text` powers the API's text-anchored vote. */
+export interface CaptionCue {
+  speaker: string | null;
+  text: string;
+  tStartSec: number;
+  tEndSec: number | null;
+}
+
+/**
+ * What the bot managed to set up for accurate attribution. Shipped with the
+ * recording so the API knows which fusion strategy to trust and so a
+ * fleet-wide regression (e.g. a Teams DOM change) is observable.
+ */
+export interface MeetingReadinessReport {
+  provider: MeetingProviderName;
+  captionsRequested: boolean;
+  captionsEnabled: boolean;
+  captionStatus: 'ok' | 'sparse' | 'unavailable' | 'policy-blocked' | 'error';
+  captionLanguage?: string;
+  captionEventCount: number;
+  rosterCaptured: boolean;
+  rosterNames: string[];
+  peoplePaneOpened: boolean;
+  galleryViewForced: boolean;
+  participantCountSeen: number | null;
+  outlineEventCount: number;
+  notes: string[];
+}
+
+export type MeetingProviderName = 'microsoft' | 'google' | 'zoom';

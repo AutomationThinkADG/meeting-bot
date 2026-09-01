@@ -18,12 +18,20 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { runTeamsReadiness } from '../lib/meetingReadiness';
+import {
+  startTeamsSpeakerCapture,
+  SpeakerCaptureHandle,
+} from '../lib/speakerCapture';
+import { MeetingReadinessReport } from '../types';
 
 const execAsync = promisify(exec);
 
 export class MicrosoftTeamsBot extends MeetBotBase {
   private _logger: Logger;
   private _correlationId: string;
+  private _speakerCapture?: SpeakerCaptureHandle;
+  private _readinessReport?: MeetingReadinessReport;
   constructor(logger: Logger, correlationId: string) {
     super();
     this.slightlySecretId = v4();
@@ -470,12 +478,29 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       await this.page.waitForTimeout(config.teamsAudioStabilizationMs);
     }
 
+    // Prepare the meeting for accurate speaker attribution (best-effort, never
+    // fatal): enable the bot's own live captions, open the People pane, force
+    // Gallery view. See docs/SPEAKER_ATTRIBUTION.md.
+    try {
+      this._readinessReport = await runTeamsReadiness({
+        page: this.page,
+        logger: this._logger,
+        userId,
+        botId,
+      });
+    } catch (err) {
+      this._logger.warn('Teams readiness routine failed (non-fatal)', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     this._logger.info('Begin recording with ffmpeg...');
     await this.recordMeetingPageWithFFmpeg({
       teamId,
       userId,
       eventId,
       botId,
+      botName: name,
       uploader,
     });
 
@@ -487,12 +512,14 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     userId,
     eventId,
     botId,
+    botName,
     uploader,
   }: {
     teamId: string;
     userId: string;
     eventId?: string;
     botId?: string;
+    botName?: string;
     uploader: IUploader;
   }): Promise<void> {
     const duration = config.maxRecordingDuration * 60 * 1000;
@@ -568,125 +595,32 @@ export class MicrosoftTeamsBot extends MeetBotBase {
           await browserLogCaptureCallback(this._logger, msg);
         } catch (err) {}
       });
-      // --- NEW BULLETPROOF NODE.JS ACTIVE SPEAKER POLLER ---
-      const speakerLogsPath = path.join(
-        process.cwd(),
-        'debug-videos',
-        `${botId || 'unknown'}_speakers.json`,
-      );
-      const speakerLogsArray: Array<{
-        name: string;
-        timestampSeconds: number;
-      }> = [];
-      let lastSpeaker = '';
-      let pollerHeartbeat = 0;
-
-      const pollActiveSpeaker = async () => {
-        if (meetingEnded || ffmpegFailed) return;
-
-        try {
-          // 1. THE HEARTBEAT (Log every 10 seconds to prove it is running)
-          pollerHeartbeat++;
-          if (pollerHeartbeat % 10 === 0) {
-            this._logger.info(
-              `🔍 Node.js Poller active: Scanning ${this.page.frames().length} browser frames...`,
-            );
-          }
-
-          let currentSpeakerName = '';
-          const indicatorSel =
-            (config as any).teamsSpeakerIndicator ||
-            '[data-tid="voice-level-stream-outline"][data-is-speaking="true"]';
-          const wrapperSel =
-            (config as any).teamsTileWrapper ||
-            '[data-tid^="calling-participant-stream"]';
-
-          // By querying this.page.frames(), we bypass all cross-origin iframe security limits
-          for (const frame of this.page.frames()) {
-            try {
-              // 2. Primary Strict Selector Search
-              const indicators = frame.locator(indicatorSel);
-              if ((await indicators.count().catch(() => 0)) > 0) {
-                const firstIndicator = indicators.first();
-                if (await firstIndicator.isVisible().catch(() => false)) {
-                  currentSpeakerName = await firstIndicator
-                    .evaluate((el, wSel) => {
-                      const tile = el.closest(wSel);
-                      return tile
-                        ? (tile.getAttribute('aria-label') || '')
-                            .split(',')[0]
-                            .trim()
-                        : '';
-                    }, wrapperSel)
-                    .catch(() => '');
-
-                  if (currentSpeakerName) break;
-                }
-              }
-
-              // 3. Brute-Force Broad Fallback Search
-              if (!currentSpeakerName) {
-                const fallbacks = frame.locator(
-                  '[aria-label*="is speaking" i], [aria-label*="is talking" i], [data-is-speaking="true"]',
-                );
-                const fallbackCount = await fallbacks.count().catch(() => 0);
-
-                if (fallbackCount > 0) {
-                  for (let i = 0; i < fallbackCount; i++) {
-                    const el = fallbacks.nth(i);
-                    if (await el.isVisible().catch(() => false)) {
-                      const aria = await el
-                        .getAttribute('aria-label')
-                        .catch(() => '');
-                      if (
-                        aria &&
-                        (aria.toLowerCase().includes('is speaking') ||
-                          aria.toLowerCase().includes('is talking'))
-                      ) {
-                        currentSpeakerName = aria
-                          .replace(/is speaking|is talking/gi, '')
-                          .trim();
-                        if (currentSpeakerName) break;
-                      }
-                    }
-                  }
-                }
-              }
-            } catch (e) {
-              // Ignore destroyed or reloading frames
-            }
-            if (currentSpeakerName) break;
-          }
-
-          // 4. Log and Save
-          if (currentSpeakerName && currentSpeakerName !== lastSpeaker) {
-            lastSpeaker = currentSpeakerName;
-            const ts = (Date.now() - (recordingStartedAt || Date.now())) / 1000;
-            speakerLogsArray.push({
-              name: currentSpeakerName,
-              timestampSeconds: ts,
-            });
-            this._logger.info(
-              `🗣️ Active Speaker: ${currentSpeakerName} at [${ts.toFixed(1)}s]`,
-            );
-            fs.writeFileSync(
-              speakerLogsPath,
-              JSON.stringify(speakerLogsArray, null, 2),
-            );
-          }
-        } catch (err) {
-          // Keep loop alive if a network exception happens
-        }
-
-        if (!meetingEnded && !ffmpegFailed) {
-          setTimeout(pollActiveSpeaker, 1000); // Check every 1 second continuously
-        }
-      };
-
-      // Start the speaker detection loop
-      pollActiveSpeaker();
-      // --- END NODE.JS SPEAKER POLLER ---
-      // --- END NODE.JS SPEAKER POLLER ---
+      // --- SPEAKER ATTRIBUTION CAPTURE (see docs/SPEAKER_ATTRIBUTION.md) ---
+      // In-page live-caption + voice-level-outline observers. Cheap (one
+      // MutationObserver that only flips a flag + a 500ms parse tick) and the
+      // signal is shipped to the API with the recording, not written to a
+      // container-local file that never leaves the box.
+      try {
+        this._speakerCapture = await startTeamsSpeakerCapture(
+          this.page,
+          this._logger,
+          {
+            recordingStartedAtEpochMs: recordingStartedAt,
+            botDisplayName: botName,
+            captionContainerSel: config.teamsCaptionContainerSel,
+            captionLineSel: config.teamsCaptionLineSel,
+            captionAuthorSel: config.teamsCaptionAuthorSel,
+            captionTextSel: config.teamsCaptionTextSel,
+            outlineSel: config.teamsSpeakerIndicator,
+            tileSel: config.teamsTileWrapper,
+            captionFinalizeQuietMs: config.captionFinalizeQuietMs,
+          },
+        );
+      } catch (err) {
+        this._logger.warn('Speaker capture failed to start (non-fatal)', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
 
       const inactivityLimitMs = config.inactivityLimit * 60 * 1000;
 
@@ -1055,6 +989,42 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
       this._logger.info('Stopping ffmpeg recording...');
       await recorder.stop();
+
+      // Harvest the speaker-attribution signal while the page is still alive
+      // and hand it to the uploader so it rides the completion webhook.
+      try {
+        await this._speakerCapture?.stop();
+        const snap = this._speakerCapture?.snapshot();
+        if (snap) {
+          this._logger.info('Speaker capture summary', {
+            captionEvents: snap.captionEventCount,
+            outlineEvents: snap.outlineEventCount,
+            rosterNames: snap.rosterNames.length,
+            spans: snap.speakerTimeline.length,
+          });
+          if (this._readinessReport) {
+            this._readinessReport.captionEventCount = snap.captionEventCount;
+            this._readinessReport.outlineEventCount = snap.outlineEventCount;
+            this._readinessReport.rosterNames = snap.rosterNames;
+            this._readinessReport.rosterCaptured = snap.rosterNames.length > 0;
+            if (
+              this._readinessReport.captionsEnabled &&
+              snap.captionEventCount === 0
+            ) {
+              this._readinessReport.captionStatus = 'sparse';
+            }
+          }
+          uploader.setSpeakerTimeline?.(snap.speakerTimeline);
+          uploader.setCaptionTranscript?.(snap.captionTranscript);
+        }
+        if (this._readinessReport) {
+          uploader.setReadinessReport?.(this._readinessReport);
+        }
+      } catch (err) {
+        this._logger.warn('Failed to harvest speaker capture (non-fatal)', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
 
       this._logger.info('Staging recorded file for upload...', { outputPath });
 

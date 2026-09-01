@@ -12,6 +12,12 @@ export interface RecordingCompletedPayload {
   status: 'completed' | string;
   blobUrl?: string; // generic storage url (S3, Azure blob, etc.)
   timestamp: string; // ISO string
+  // metadata carries, in addition to storage/duration details, the speaker
+  // attribution signal consumed by copilot-bot-api:
+  //   metadata.speakerTimeline    SpeakerSpan[]           (names + times)
+  //   metadata.captionTranscript  CaptionCue[]            (present when under the size cap)
+  //   metadata.readinessReport    MeetingReadinessReport  (what the bot set up)
+  // See meeting-bot/docs/SPEAKER_ATTRIBUTION.md.
   metadata?: Record<string, any>;
 }
 

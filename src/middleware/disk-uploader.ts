@@ -6,7 +6,14 @@ import {
   initializeMultipartUpload,
   uploadChunkToStorage,
 } from '../services/uploadService';
-import { ContentType, extensionToContentType, FileType } from '../types';
+import {
+  CaptionCue,
+  ContentType,
+  extensionToContentType,
+  FileType,
+  MeetingReadinessReport,
+  SpeakerSpan,
+} from '../types';
 import fs, { createWriteStream } from 'fs';
 import path from 'path';
 import { execFile } from 'child_process';
@@ -67,6 +74,13 @@ export interface IUploader {
   saveDataToTempFile(data: Buffer): Promise<boolean>;
   setRecordingDuration(durationSeconds: number): void;
 
+  // Speaker attribution — see docs/SPEAKER_ATTRIBUTION.md. Optional so callers
+  // that don't capture speaker data (or future uploaders) don't have to stub
+  // them; the Teams bot sets all three.
+  setSpeakerTimeline?(spans: SpeakerSpan[]): void;
+  setCaptionTranscript?(cues: CaptionCue[]): void;
+  setReadinessReport?(report: MeetingReadinessReport): void;
+
   // New methods for direct-to-cloud streaming
   stageChunk(
     key: string,
@@ -113,6 +127,12 @@ class DiskUploader implements IUploader {
   private lastStorageDetails?: Record<string, any>;
   private recordingDuration?: number;
   private firstChunkReceivedAt?: number;
+
+  // Speaker-attribution signal harvested by the bot, shipped on the completion
+  // webhook. See docs/SPEAKER_ATTRIBUTION.md.
+  private speakerTimeline?: SpeakerSpan[];
+  private captionTranscript?: CaptionCue[];
+  private readinessReport?: MeetingReadinessReport;
 
   private queue: Buffer[];
   private writing: boolean;
@@ -454,6 +474,30 @@ class DiskUploader implements IUploader {
       );
       return false;
     }
+  }
+
+  public setSpeakerTimeline(spans: SpeakerSpan[]): void {
+    if (Array.isArray(spans) && spans.length) this.speakerTimeline = spans;
+  }
+
+  public setCaptionTranscript(cues: CaptionCue[]): void {
+    if (!Array.isArray(cues) || !cues.length) return;
+    // Keep the completion webhook a sane size: above the cap, ship the speaker
+    // timeline (names + times) only and let the API fall back to time-overlap
+    // fusion. See docs/SPEAKER_ATTRIBUTION.md.
+    const bytes = Buffer.byteLength(JSON.stringify(cues), 'utf8');
+    if (bytes > config.captionTranscriptMaxBytes) {
+      this._logger.warn(
+        'Caption transcript exceeds inline cap; shipping speaker timeline only',
+        { bytes, cap: config.captionTranscriptMaxBytes },
+      );
+      return;
+    }
+    this.captionTranscript = cues;
+  }
+
+  public setReadinessReport(report: MeetingReadinessReport): void {
+    if (report) this.readinessReport = report;
   }
 
   public setRecordingDuration(durationSeconds: number): void {
@@ -1089,6 +1133,16 @@ class DiskUploader implements IUploader {
               uploaderType: config.uploaderType,
               duration: this.recordingDuration,
               storage: this.lastStorageDetails,
+              // Speaker attribution — see docs/SPEAKER_ATTRIBUTION.md
+              ...(this.speakerTimeline
+                ? { speakerTimeline: this.speakerTimeline }
+                : {}),
+              ...(this.captionTranscript
+                ? { captionTranscript: this.captionTranscript }
+                : {}),
+              ...(this.readinessReport
+                ? { readinessReport: this.readinessReport }
+                : {}),
             },
           };
           await notifyRecordingCompleted(payload, this._logger);

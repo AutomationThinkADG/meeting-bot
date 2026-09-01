@@ -17,15 +17,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stealth mode browser automation
 - Single job execution system
 - Recording functionality with duration limits
+- **Speaker attribution (Microsoft Teams)** — the bot enables its own live
+  captions, opens the People pane and forces Gallery view (`src/lib/meetingReadiness.ts`),
+  then captures a speaker timeline + caption transcript in-page
+  (`src/lib/speakerCapture.ts`) and ships it on the recording-completed webhook
+  (`metadata.speakerTimeline` / `captionTranscript` / `readinessReport`).
+  New types `SpeakerSpan` / `CaptionCue` / `MeetingReadinessReport`.
+  See `docs/SPEAKER_ATTRIBUTION.md`.
 
 ### Changed
-- N/A
+- `MicrosoftTeamsBot` runs the readiness routine before recording and harvests
+  the speaker signal into the uploader in the recording `finally`.
+- `teamsSpeakerIndicator` default no longer references the non-existent
+  `[data-is-speaking="true"]` attribute.
 
 ### Deprecated
 - N/A
 
 ### Removed
-- N/A
+- Node-side `pollActiveSpeaker` loop in `MicrosoftTeamsBot` (1 s `page.frames()`
+  polling that wrote `<botId>_speakers.json` to a container-local dir that never
+  reached the API). Replaced by the in-page observer in `src/lib/speakerCapture.ts`.
 
 ### Fixed
 - N/A

@@ -159,10 +159,59 @@ export default {
     : ('s3' as UploaderType),
   // inside your config setup
   // Inside your config file
+  // --- Speaker attribution (see docs/SPEAKER_ATTRIBUTION.md) ---------------
+  //
+  // Every selector below is env-overridable on purpose: the Teams/Meet web DOM
+  // is not a contract and shifts without notice, so a broken selector must be a
+  // hot config patch, never a redeploy. Keep docs/SPEAKER_ATTRIBUTION.md in sync
+  // when you change a default here.
+
+  // Active-speaker "voice level" ring. NOTE: there is no `data-is-speaking`
+  // attribute on the current client — speaking is an inline-style animation of
+  // this node, detected by observing style mutations. Match the node, not a
+  // boolean state.
   teamsSpeakerIndicator:
     process.env.TEAMS_SPEAKER_INDICATOR ||
-    '[data-tid="voice-level-stream-outline"][data-is-speaking="true"]',
+    '[data-tid="voice-level-stream-outline"]',
+  // Participant tile wrapper. On the current client the tile's `data-tid` value
+  // is the participant display name; we also fall back to aria-label parsing.
   teamsTileWrapper:
     process.env.TEAMS_TILE_WRAPPER ||
-    '[data-tid^="calling-participant-stream"]',
+    '[data-tid^="calling-participant-stream"], [data-stream-type][data-tid]',
+
+  // Whether the bot actively prepares the meeting for accurate attribution
+  // (enable its own live captions, open the People pane, force gallery view).
+  // All of these are per-participant / view-only actions — invisible to other
+  // attendees, no host action or consent required.
+  teamsReadinessEnabled: process.env.TEAMS_READINESS_ENABLED !== 'false',
+  teamsEnableCaptions: process.env.TEAMS_ENABLE_CAPTIONS !== 'false',
+  teamsOpenPeoplePane: process.env.TEAMS_OPEN_PEOPLE_PANE !== 'false',
+  teamsForceGalleryView: process.env.TEAMS_FORCE_GALLERY_VIEW !== 'false',
+  // Spoken-language hint for live captions, e.g. "en-us", "es-es". Empty = leave
+  // whatever Teams auto-selects.
+  teamsCaptionLanguage: process.env.TEAMS_CAPTION_LANGUAGE || '',
+
+  // Teams live-caption DOM. Comma-separated lists are tried in order.
+  teamsCaptionContainerSel:
+    process.env.TEAMS_CAPTION_CONTAINER_SEL ||
+    '[data-tid="closed-caption-v2-window-wrapper"], [data-tid="closed-caption-renderer-wrapper"], [data-tid="closed-captions-renderer"]',
+  teamsCaptionLineSel:
+    process.env.TEAMS_CAPTION_LINE_SEL ||
+    '.fui-ChatMessageCompact, [data-tid="closed-caption-message"]',
+  teamsCaptionAuthorSel:
+    process.env.TEAMS_CAPTION_AUTHOR_SEL || '[data-tid="author"]',
+  teamsCaptionTextSel:
+    process.env.TEAMS_CAPTION_TEXT_SEL || '[data-tid="closed-caption-text"]',
+  // How long a caption line's text must stay unchanged before we treat it as
+  // final (Teams mutates a line in place as recognition firms up).
+  captionFinalizeQuietMs: process.env.CAPTION_FINALIZE_QUIET_MS
+    ? Number(process.env.CAPTION_FINALIZE_QUIET_MS)
+    : 1200,
+
+  // Hard ceiling on the caption transcript we ship inline with the recording
+  // webhook. Above this we ship the speaker timeline (names + times) only and
+  // the API falls back to time-overlap fusion.
+  captionTranscriptMaxBytes: process.env.CAPTION_TRANSCRIPT_MAX_BYTES
+    ? Number(process.env.CAPTION_TRANSCRIPT_MAX_BYTES)
+    : 700 * 1024,
 };
