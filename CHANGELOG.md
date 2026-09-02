@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `GoogleMeetBot.join` now fails fast (non-retryable `KnownError`) when handed a
+  `teams.microsoft.com` / `teams.live.com` / `zoom.us` URL instead of running the
+  anonymous Google join loop — which, on a Teams `light-meetings/launch` URL,
+  landed one guest in the lobby per retry (up to 10). The routing itself is fixed
+  in `copilot-bot-api` (`teams.live.com` → `/microsoft/join`); this is the guard.
+
 ### Added
 - Initial project setup
 - Multi-platform meeting bot support (Google Meet, Microsoft Teams, Zoom)

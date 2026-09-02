@@ -2,6 +2,7 @@ import { JoinParams } from './AbstractMeetBot';
 import { BotStatus, WaitPromise } from '../types';
 import config from '../config';
 import {
+  KnownError,
   RecordingUploadFailedError,
   UnsupportedMeetingError,
   WaitingAtLobbyRetryError,
@@ -52,6 +53,18 @@ export class GoogleMeetBot extends MeetBotBase {
     uploader,
   }: JoinParams): Promise<void> {
     const _state: BotStatus[] = ['processing'];
+
+    // Safety net: a Teams/Zoom link must never reach this handler. The anonymous
+    // Google join loop retries up to maxJoinRequestAttempts, and on a Teams
+    // `light-meetings/launch` URL every retry lands a fresh guest in the lobby.
+    // Fail fast, non-retryable, so the caller's routing bug is obvious.
+    if (/(?:^|\.)(teams\.microsoft\.com|teams\.live\.com|zoom\.us)\//i.test(url)) {
+      throw new KnownError(
+        `GoogleMeetBot received a non-Google meeting URL (${url}); routing bug upstream.`,
+        false,
+        0,
+      );
+    }
 
     const handleUpload = async () => {
       this._logger.info('Begin recording upload to server', { userId, teamId });
