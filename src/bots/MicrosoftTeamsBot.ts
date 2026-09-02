@@ -63,7 +63,18 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     };
 
     try {
-      const pushState = (st: BotStatus) => _state.push(st);
+      const pushState = (st: BotStatus) => {
+        _state.push(st);
+        // Tell the API as soon as we're actually in the meeting, not just at the
+        // end of the run — drives the dashboard's Requested -> Joining -> In
+        // meeting transition and clears a stuck DEPLOYING row.
+        if (st === 'joined') {
+          void patchBotStatus(
+            { botId, eventId, provider: 'microsoft', status: _state, token: bearerToken },
+            this._logger,
+          ).catch(() => undefined);
+        }
+      };
       await this.joinMeeting({
         url,
         name,

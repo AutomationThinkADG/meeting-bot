@@ -78,7 +78,15 @@ export class GoogleMeetBot extends MeetBotBase {
     };
 
     try {
-      const pushState = (st: BotStatus) => _state.push(st);
+      const pushState = (st: BotStatus) => {
+        _state.push(st);
+        if (st === 'joined') {
+          void patchBotStatus(
+            { botId, eventId, provider: 'google', status: _state, token: bearerToken },
+            this._logger,
+          ).catch(() => undefined);
+        }
+      };
       await this.joinMeeting({
         url,
         name,

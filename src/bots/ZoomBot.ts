@@ -48,7 +48,15 @@ export class ZoomBot extends BotBase {
     };
     
     try {
-      const pushState = (st: BotStatus) => _state.push(st);
+      const pushState = (st: BotStatus) => {
+        _state.push(st);
+        if (st === 'joined') {
+          void patchBotStatus(
+            { botId, eventId, provider: 'zoom', status: _state, token: bearerToken },
+            this._logger,
+          ).catch(() => undefined);
+        }
+      };
       await this.joinMeeting({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, pushState, uploader });
       await patchBotStatus({ botId, eventId, provider: 'zoom', status: _state, token: bearerToken }, this._logger);
 
