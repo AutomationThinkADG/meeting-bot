@@ -76,7 +76,7 @@ export default {
     : 10,
   inactivityLimit: process.env.MEETING_INACTIVITY_MINUTES
     ? Number(process.env.MEETING_INACTIVITY_MINUTES)
-    : 1,
+    : 15,
   activateInactivityDetectionAfter: process.env
     .INACTIVITY_DETECTION_START_DELAY_MINUTES
     ? Number(process.env.INACTIVITY_DETECTION_START_DELAY_MINUTES)
