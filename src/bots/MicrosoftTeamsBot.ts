@@ -797,7 +797,16 @@ export class MicrosoftTeamsBot extends MeetBotBase {
               'du wurdest entfernt',
             ];
 
+            // Only trust the phrases once the in-call UI is gone. While the
+            // call is live the page also contains live captions, chat and
+            // participant names, so someone simply saying "the call ended"
+            // would otherwise make the bot leave a running meeting. The
+            // Leave button exists for as long as we are actually in the call.
+            const inCall = !!document.querySelector(
+              '#hangup-button, button[data-tid="hangup-button"]',
+            );
             if (
+              !inCall &&
               endedPhrases.some((phrase) =>
                 bodyText.toLowerCase().includes(phrase),
               )
