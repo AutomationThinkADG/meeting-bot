@@ -20,3 +20,7 @@ debug-videos/
 compose.override.yml
 compose.override.yml.bak
 docker-compose.override.yml
+
+# Exported Azure resource definitions — carry live secrets (storage keys, connection strings) in plain env vars, never commit
+*.containerapp.yaml
+meeting-bot-dev.yaml

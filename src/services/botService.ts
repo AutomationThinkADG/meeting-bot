@@ -9,12 +9,17 @@ export const patchBotStatus = async ({
   provider,
   status,
   token,
+  reason,
 }: {
     eventId?: string,
     token: string,
     botId?: string,
     provider: 'google' | 'microsoft' | 'zoom',
     status: BotStatus[],
+    // Why, not just that — stored on meetings.end_reason(_detail) so the
+    // dashboard/DB can say "silence timeout" instead of a generic failure.
+    // See db/migrations/029_meeting_end_reason.sql (vpm-api) for the code list.
+    reason?: { code: string; detail?: string },
 }, logger: Logger) => {
   try {
     const apiV2 = createApiV2(token, config.serviceKey);
@@ -25,6 +30,7 @@ export const patchBotStatus = async ({
       botId,
       provider,
       status,
+      reason,
     });
     return response.data.success;
   } catch(e: any) {

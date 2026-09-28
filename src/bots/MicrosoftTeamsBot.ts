@@ -33,6 +33,12 @@ export class MicrosoftTeamsBot extends MeetBotBase {
   private _correlationId: string;
   private _speakerCapture?: SpeakerCaptureHandle;
   private _readinessReport?: MeetingReadinessReport;
+  // Why the recording ended, for the "clean stop" cases (silence, the
+  // ended-text scan, alone-too-long, max duration) that return normally
+  // rather than throw — join()'s final patchBotStatus() reads this. A
+  // thrown error (lobby denial, upload failure, ...) is categorized at the
+  // catch site instead. See db/migrations/029_meeting_end_reason.sql (vpm-api).
+  private _endReason?: { code: string; detail?: string };
   constructor(logger: Logger, correlationId: string) {
     super();
     this.slightlySecretId = v4();
@@ -68,8 +74,10 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         _state.push(st);
         // Tell the API as soon as we're actually in the meeting, not just at the
         // end of the run — drives the dashboard's Requested -> Joining -> In
-        // meeting transition and clears a stuck DEPLOYING row.
-        if (st === 'joined') {
+        // meeting transition and clears a stuck DEPLOYING row. 'waiting_admission'
+        // is the same idea for the lobby: previously invisible on the dashboard,
+        // so nobody knew to go admit the bot until it had already timed out.
+        if (st === 'joined' || st === 'waiting_admission') {
           void patchBotStatus(
             { botId, eventId, provider: 'microsoft', status: _state, token: bearerToken },
             this._logger,
@@ -116,6 +124,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
           provider: 'microsoft',
           status: _state,
           token: bearerToken,
+          reason: this._endReason,
         },
         this._logger,
       );
@@ -132,6 +141,24 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       if (!_state.includes('finished') && !_state.includes('failed'))
         _state.push('failed');
 
+      const failureReason =
+        this._endReason ??
+        (error instanceof WaitingAtLobbyRetryError
+          ? {
+              code: (error.documentBodyText || '').includes(
+                MICROSOFT_REQUEST_DENIED,
+              )
+                ? 'lobby_denied'
+                : 'lobby_timeout',
+              detail: error.documentBodyText || undefined,
+            }
+          : error instanceof RecordingUploadFailedError
+            ? { code: 'upload_failed' }
+            : {
+                code: 'container_error',
+                detail: error instanceof Error ? error.message : String(error),
+              });
+
       await patchBotStatus(
         {
           botId,
@@ -139,6 +166,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
           provider: 'microsoft',
           status: _state,
           token: bearerToken,
+          reason: failureReason,
         },
         this._logger,
       );
@@ -419,6 +447,11 @@ export class MicrosoftTeamsBot extends MeetBotBase {
 
     try {
       const wanderingTime = config.joinWaitTime * 60 * 1000;
+      // Surfaced on the dashboard the instant it's true — up to
+      // JOIN_WAIT_TIME_MINUTES of silent lobby-waiting used to be the single
+      // biggest cause of a missed admission (see db/migrations/
+      // 030_meeting_awaiting_admission_status.sql, vpm-api).
+      pushState('waiting_admission');
       const callButton = this.page.getByRole('button', { name: /Leave/i });
       await callButton.waitFor({ timeout: wanderingTime });
       this._logger.info('Bot is entering the meeting...');
@@ -601,16 +634,27 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             exitCode: code,
           });
           ffmpegFailed = true;
+          if (!this._endReason) {
+            this._endReason = { code: 'ffmpeg_error', detail: `exit code ${code}` };
+          }
           ffmpegError = new Error(
             `FFmpeg exited with code ${code} during recording`,
           );
         }
       });
 
-      await this.page.exposeFunction('screenAppMeetEnd', () => {
-        this._logger.info('Meeting ended signal received from browser');
-        meetingEnded = true;
-      });
+      await this.page.exposeFunction(
+        'screenAppMeetEnd',
+        (reasonCode?: string, reasonDetail?: string) => {
+          this._logger.info('Meeting ended signal received from browser', {
+            reasonCode,
+          });
+          if (reasonCode && !this._endReason) {
+            this._endReason = { code: reasonCode, detail: reasonDetail };
+          }
+          meetingEnded = true;
+        },
+      );
 
       this.page.on('console', async (msg) => {
         try {
@@ -676,6 +720,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
                     'Audio silence threshold reached, ending Microsoft Teams meeting',
                   );
                   clearInterval(checkInterval);
+                  if (!this._endReason) this._endReason = { code: 'silence_timeout' };
                   meetingEnded = true;
                 }
               } else {
@@ -710,7 +755,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             console.log(
               `Max recording duration (${maxDuration / 60000} minutes) reached, ending meeting`,
             );
-            (window as any).screenAppMeetEnd();
+            (window as any).screenAppMeetEnd('max_duration_reached');
           }, maxDuration);
           console.log(
             `Max duration timeout set to ${maxDuration / 60000} minutes (safety limit)`,
@@ -942,11 +987,17 @@ export class MicrosoftTeamsBot extends MeetBotBase {
             try {
               const meetingState = getTeamsMeetingState();
               if (meetingState === 'ended') {
+                const endedBody = normalizeText(document.body.innerText || '');
+                const removed = /removed|entfernt/i.test(endedBody);
                 console.log(
                   'Teams meeting ended page state detected, ending recording.',
+                  { removed },
                 );
                 clearInterval(interval);
-                (window as any).screenAppMeetEnd();
+                (window as any).screenAppMeetEnd(
+                  removed ? 'removed_from_meeting' : 'meeting_ended_detected',
+                  endedBody.slice(0, 200),
+                );
                 return;
               }
 
@@ -980,7 +1031,10 @@ export class MicrosoftTeamsBot extends MeetBotBase {
                 meetingState,
               });
               clearInterval(interval);
-              (window as any).screenAppMeetEnd();
+              (window as any).screenAppMeetEnd(
+                'alone_timeout',
+                `inferredCount=${inferredCount} meetingState=${meetingState}`,
+              );
             } catch (error) {}
           }, 2000);
         },

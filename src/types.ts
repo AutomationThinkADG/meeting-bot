@@ -121,7 +121,12 @@ export interface WaitPromise {
   promise: Promise<void>;
   resolveEarly: (value: void | PromiseLike<void>) => void;
 }
-export type BotStatus = 'processing' | 'joined' | 'finished' | 'failed';
+export type BotStatus =
+  | 'processing'
+  | 'waiting_admission'
+  | 'joined'
+  | 'finished'
+  | 'failed';
 export type WaitingAtLobbyCategory = {
   category: 'WaitingAtLobby',
   subCategory: 'Timeout' | 'StuckInLobby' | 'UserDeniedRequest',
