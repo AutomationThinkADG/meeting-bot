@@ -6,6 +6,7 @@ import googleRouter from './google';
 import microsoftRouter from './microsoft';
 import zoomRouter from './zoom';
 import { globalJobStore } from '../lib/globalJobStore';
+import { stopActiveBot } from '../lib/activeBots';
 import { RedisConsumerService } from '../connect/RedisConsumerService';
 
 const app = express();
@@ -22,6 +23,21 @@ app.get('/isbusy', async (req, res) => {
   // Use the job store's isBusy status
   const jobStoreBusy = globalJobStore.isBusy() ? 1 : 0;
   return res.status(200).json({ success: true, data: jobStoreBusy });
+});
+
+// Manual "Stop bot" — the Timeline Dashboard's in-progress meeting node
+// calls this (via the API) so a stuck bot can be ended and retried instead
+// of waiting out the silence/lone-participant timers, which never fire when
+// e.g. two bots are both waiting on each other in an already-ended meeting.
+// Ends the recording the same clean way those timers do (upload still
+// happens); it isn't a kill. 404 just means this replica isn't running that
+// bot right now (wrong replica, or it already finished).
+app.post('/bot/:botId/stop', async (req, res) => {
+  const { botId } = req.params;
+  const stopped = stopActiveBot(botId);
+  return res
+    .status(stopped ? 200 : 404)
+    .json({ success: stopped, botId });
 });
 
 app.get('/health', async (req, res) => {

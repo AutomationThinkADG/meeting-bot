@@ -13,6 +13,7 @@ import { uploadDebugImage } from '../services/bugService';
 import createBrowserContext from '../lib/chromium';
 import { browserLogCaptureCallback } from '../util/logger';
 import { MICROSOFT_REQUEST_DENIED } from '../constants';
+import { registerActiveBot, unregisterActiveBot } from '../lib/activeBots';
 import { FFmpegRecorder } from '../lib/ffmpegRecorder';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -578,6 +579,16 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     let recordingStartedAt: number | undefined;
     let meetingEnded = false;
 
+    // Registered for the lifetime of this recording so a "Stop bot" request
+    // from the API can end it the same way the silence timer would — see
+    // ../lib/activeBots.ts.
+    if (botId) {
+      registerActiveBot(botId, () => {
+        this._logger.info('Stop requested externally, ending recording.');
+        meetingEnded = true;
+      });
+    }
+
     try {
       await recorder.start();
       recordingStartedAt = Date.now();
@@ -1006,6 +1017,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       throw error;
     } finally {
       meetingEnded = true;
+      if (botId) unregisterActiveBot(botId);
 
       this._logger.info('Stopping ffmpeg recording...');
       await recorder.stop();
