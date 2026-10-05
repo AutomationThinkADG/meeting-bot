@@ -453,7 +453,29 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       // 030_meeting_awaiting_admission_status.sql, vpm-api).
       pushState('waiting_admission');
       const callButton = this.page.getByRole('button', { name: /Leave/i });
-      await callButton.waitFor({ timeout: wanderingTime });
+      // Poll instead of one long waitFor(): Teams shows "you were denied
+      // access" as soon as the lobby request is declined/expires, but a
+      // plain waitFor for the Leave button kept sitting on that dead page
+      // for the whole JOIN_WAIT_TIME_MINUTES (both of 2026-10-05's failed
+      // joins burned exactly 10:00 this way) — and the whole time the
+      // bot held this container's only job slot, so other meetings
+      // requested meanwhile got 409 "busy". Fail the moment it's denied.
+      const lobbyDeadline = Date.now() + wanderingTime;
+      let entered = false;
+      while (Date.now() < lobbyDeadline) {
+        if (await callButton.first().isVisible().catch(() => false)) {
+          entered = true;
+          break;
+        }
+        const lobbyText = await this.page
+          .evaluate(() => document.body.innerText)
+          .catch(() => '');
+        if ((lobbyText || '').includes(MICROSOFT_REQUEST_DENIED)) break;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+      if (!entered) {
+        throw new Error('Not admitted: denied or lobby wait timed out');
+      }
       this._logger.info('Bot is entering the meeting...');
     } catch (error) {
       const bodyText = await this.page.evaluate(() => document.body.innerText);
