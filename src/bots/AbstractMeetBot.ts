@@ -21,6 +21,8 @@ export interface JoinParams {
   userId: string;
   botId?: string;
   eventId?: string;
+  /** The meeting's scheduled start (ISO), when the bot is sent early. */
+  scheduledStart?: string;
   uploader: IUploader;
 }
 

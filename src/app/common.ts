@@ -13,6 +13,8 @@ export interface MeetingJoinParams {
   timezone: string;
   botId?: string;
   eventId?: string;
+  /** The meeting's scheduled start (ISO), when the bot is sent early. */
+  scheduledStart?: string;
 }
 
 export interface MeetingJoinRedisParams extends MeetingJoinParams {

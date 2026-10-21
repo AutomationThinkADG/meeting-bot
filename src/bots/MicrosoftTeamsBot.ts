@@ -1,4 +1,5 @@
 import { Page } from 'playwright';
+import { aloneGraceMinutes, lobbyWaitMs } from '../lib/earlyJoin';
 import { JoinParams } from './AbstractMeetBot';
 import { BotStatus } from '../types';
 import config from '../config';
@@ -54,6 +55,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     userId,
     eventId,
     botId,
+    scheduledStart,
     uploader,
   }: JoinParams): Promise<void> {
     const _state: BotStatus[] = ['processing'];
@@ -93,6 +95,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         userId,
         eventId,
         botId,
+        scheduledStart,
         pushState,
         uploader,
       });
@@ -206,6 +209,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     userId,
     eventId,
     botId,
+    scheduledStart,
     pushState,
     uploader,
   }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
@@ -446,7 +450,12 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     );
 
     try {
-      const wanderingTime = config.joinWaitTime * 60 * 1000;
+      const wanderingTime = lobbyWaitMs(
+        scheduledStart,
+        Date.now(),
+        config.joinWaitTime,
+        config.aloneWaitAfterStartMinutes,
+      );
       // Surfaced on the dashboard the instant it's true — up to
       // JOIN_WAIT_TIME_MINUTES of silent lobby-waiting used to be the single
       // biggest cause of a missed admission (see db/migrations/
@@ -572,6 +581,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       eventId,
       botId,
       botName: name,
+      scheduledStart,
       uploader,
     });
 
@@ -584,6 +594,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     eventId,
     botId,
     botName,
+    scheduledStart,
     uploader,
   }: {
     teamId: string;
@@ -591,6 +602,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     eventId?: string;
     botId?: string;
     botName?: string;
+    scheduledStart?: string;
     uploader: IUploader;
   }): Promise<void> {
     const duration = config.maxRecordingDuration * 60 * 1000;
@@ -715,6 +727,15 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       }
 
       const inactivityLimitMs = config.inactivityLimit * 60 * 1000;
+      // Sent before the start: don't treat the empty meeting as over until
+      // people have had time to arrive.
+      const aloneGraceMin = aloneGraceMinutes(
+        scheduledStart,
+        Date.now(),
+        config.activateInactivityDetectionAfter,
+        config.aloneWaitAfterStartMinutes,
+      );
+      this._logger.info('Alone/silence checks start after', { minutes: Math.round(aloneGraceMin * 10) / 10, scheduledStart });
 
       const monitorAudioSilence = async () => {
         try {
@@ -763,7 +784,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         () => {
           monitorAudioSilence();
         },
-        config.activateInactivityDetectionAfter * 60 * 1000,
+        aloneGraceMin * 60 * 1000,
       );
 
       // We only inject the participant counter / inactivity detector into the browser now
@@ -1065,7 +1086,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
           }, 2000);
         },
         {
-          activateAfterMinutes: config.activateInactivityDetectionAfter,
+          activateAfterMinutes: aloneGraceMin,
           loneParticipantExitDelayMs:
             config.loneParticipantExitDelaySeconds * 1000,
           maxDuration: duration,

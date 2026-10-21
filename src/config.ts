@@ -86,6 +86,11 @@ export default {
     ? Number(process.env.LONE_PARTICIPANT_EXIT_DELAY_SECONDS)
     : 10,
   serviceKey: process.env.SCREENAPP_BACKEND_SERVICE_API_KEY,
+  // Bot sent before the scheduled start: stay (alone or in the lobby) until
+  // this many minutes after the start before giving up (src/lib/earlyJoin.ts).
+  aloneWaitAfterStartMinutes: process.env.ALONE_WAIT_AFTER_START_MINUTES
+    ? Number(process.env.ALONE_WAIT_AFTER_START_MINUTES)
+    : 10,
   joinWaitTime: process.env.JOIN_WAIT_TIME_MINUTES
     ? Number(process.env.JOIN_WAIT_TIME_MINUTES)
     : 10,

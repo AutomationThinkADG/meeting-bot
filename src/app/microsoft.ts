@@ -20,7 +20,8 @@ const joinMicrosoftTeams = async (req: Request, res: Response) => {
     timezone,
     userId,
     eventId,
-    botId
+    botId,
+    scheduledStart
   }: MeetingJoinParams = req.body;
 
   // Validate required fields
@@ -65,7 +66,7 @@ const joinMicrosoftTeams = async (req: Request, res: Response) => {
 
       // Create and join the meeting
       const bot = new MicrosoftTeamsBot(logger, correlationId);
-      await bot.join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, uploader });
+      await bot.join({ url, name, bearerToken, teamId, timezone, userId, eventId, botId, scheduledStart, uploader });
     }, logger, 0, (error) => notifyMeetingJoinFailure({
       bearerToken,
       url,

@@ -10,7 +10,7 @@
     "stop": "docker compose down",
     "build": "tsc",
     "lint": "eslint \"*/**/*.{js,ts}\" --quiet --fix",
-    "test": "ts-node test/announceInChat.test.ts"
+    "test": "ts-node test/earlyJoin.test.ts && ts-node test/announceInChat.test.ts"
   },
   "keywords": [],
   "author": "screenappai",
