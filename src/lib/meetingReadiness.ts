@@ -418,6 +418,61 @@ async function setCaptionLanguage(ctx: ReadinessContext): Promise<void> {
   await page.keyboard.press('Escape').catch(() => undefined);
 }
 
+/**
+ * Post one line in the meeting chat so everyone knows the call is being
+ * transcribed: "<assistant name> is transcribing this meeting." Best-effort:
+ * guests can't always chat (organizer settings, lobby), and a miss never
+ * stops the recording. Run it before readiness, which reopens the People pane.
+ */
+export async function announceInChat(
+  page: Page,
+  logger: Logger,
+  name: string,
+): Promise<boolean> {
+  if (!config.teamsAnnounceInChat) return false;
+  const text = `${(name || '').trim() || 'ADG Transcript'} is transcribing this meeting.`;
+  try {
+    const opened = await clickFirst(
+      page,
+      [
+        'button[data-tid="chat-button"]',
+        '#chat-button',
+        'button[aria-label="Chat"]',
+        'button[aria-label*="Show conversation" i]',
+        'button[aria-label*="chat" i]',
+      ],
+      'Chat pane',
+      logger,
+    );
+    if (!opened) {
+      logger.info('announce: Chat button not found');
+      return false;
+    }
+    const box = page
+      .locator(
+        [
+          '[data-tid="ckeditor"][contenteditable="true"]',
+          '[data-tid="ckeditor"] [contenteditable="true"]',
+          'div[role="textbox"][contenteditable="true"]',
+          '[contenteditable="true"][aria-label*="message" i]',
+        ].join(', '),
+      )
+      .first();
+    await box.waitFor({ state: 'visible', timeout: 8000 });
+    await box.click({ timeout: CLICK_TIMEOUT });
+    await page.keyboard.type(text, { delay: 10 });
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(800);
+    logger.info('announce: posted in meeting chat');
+    return true;
+  } catch (err) {
+    logger.info('announce: could not post in meeting chat', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+}
+
 async function openPeoplePane(
   ctx: ReadinessContext,
   report: MeetingReadinessReport,

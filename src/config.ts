@@ -187,6 +187,8 @@ export default {
   teamsEnableCaptions: process.env.TEAMS_ENABLE_CAPTIONS !== 'false',
   teamsOpenPeoplePane: process.env.TEAMS_OPEN_PEOPLE_PANE !== 'false',
   teamsForceGalleryView: process.env.TEAMS_FORCE_GALLERY_VIEW !== 'false',
+  // Post "<assistant> is transcribing this meeting." in the meeting chat on join.
+  teamsAnnounceInChat: process.env.TEAMS_ANNOUNCE_IN_CHAT !== 'false',
   // Spoken-language hint for live captions, e.g. "en-us", "es-es". Empty = leave
   // whatever Teams auto-selects.
   teamsCaptionLanguage: process.env.TEAMS_CAPTION_LANGUAGE || '',

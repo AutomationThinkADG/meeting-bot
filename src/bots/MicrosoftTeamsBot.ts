@@ -19,7 +19,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { runTeamsReadiness } from '../lib/meetingReadiness';
+import { announceInChat, runTeamsReadiness } from '../lib/meetingReadiness';
 import {
   startTeamsSpeakerCapture,
   SpeakerCaptureHandle,
@@ -544,6 +544,10 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       );
       await this.page.waitForTimeout(config.teamsAudioStabilizationMs);
     }
+
+    // Tell the room it's being transcribed (best-effort; before readiness,
+    // which switches the side pane back to People).
+    await announceInChat(this.page, this._logger, name);
 
     // Prepare the meeting for accurate speaker attribution (best-effort, never
     // fatal): enable the bot's own live captions, open the People pane, force
