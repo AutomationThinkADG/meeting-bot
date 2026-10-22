@@ -40,6 +40,19 @@ app.post('/bot/:botId/stop', async (req, res) => {
     .json({ success: stopped, botId });
 });
 
+// Keep-alive for scale-to-zero. The Container App scales on concurrent HTTP
+// requests, but a recording bot gets none while it's in a meeting, so the
+// platform could stop its replica mid-recording. While bots are live, vpm-api
+// (botKeepAlive timer) holds one of these open per bot: each held request
+// counts as one, keeping that many replicas up. ?seconds= is capped at 55.
+app.get('/keepalive', async (req, res) => {
+  const seconds = Math.min(55, Math.max(1, Number(req.query.seconds) || 50));
+  const timer = setTimeout(() => {
+    res.status(200).json({ ok: true, busy: globalJobStore.isBusy() });
+  }, seconds * 1000);
+  req.on('close', () => clearTimeout(timer));
+});
+
 app.get('/health', async (req, res) => {
   // Simple health check endpoint for Docker
   return res.status(200).json({ 
