@@ -1,5 +1,6 @@
 import { Page } from 'playwright';
 import { aloneGraceMinutes, lobbyWaitMs } from '../lib/earlyJoin';
+import { makeAvatarVideo, removeAvatarVideo } from '../lib/avatarVideo';
 import { JoinParams } from './AbstractMeetBot';
 import { BotStatus } from '../types';
 import config from '../config';
@@ -56,6 +57,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     eventId,
     botId,
     scheduledStart,
+    image,
     uploader,
   }: JoinParams): Promise<void> {
     const _state: BotStatus[] = ['processing'];
@@ -96,6 +98,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
         eventId,
         botId,
         scheduledStart,
+        image,
         pushState,
         uploader,
       });
@@ -210,6 +213,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
     eventId,
     botId,
     scheduledStart,
+    image,
     pushState,
     uploader,
   }: JoinParams & { pushState(state: BotStatus): void }): Promise<void> {
@@ -293,11 +297,18 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       );
     }
 
+    // The assistant's picture becomes the bot's camera (anonymous guests
+    // can't have a profile picture in Teams). Null: camera stays off.
+    const avatarVideo = config.teamsCameraAvatar
+      ? await makeAvatarVideo(image, botId ?? eventId ?? 'bot', this._logger)
+      : null;
+
     this._logger.info('Launching browser for actual meeting...');
     this.page = await createBrowserContext(
       url,
       this._correlationId,
       'microsoft',
+      { fakeVideoFile: avatarVideo },
     );
 
     this._logger.info('Navigating to Microsoft Teams Meeting URL...');
@@ -340,30 +351,52 @@ export class MicrosoftTeamsBot extends MeetBotBase {
           'Attempting to turn off camera and mute microphone...',
         );
 
-        // Turn off camera
-        try {
-          const cameraSelectors = [
-            'input[data-tid="toggle-video"][checked]',
-            'input[type="checkbox"][title*="Turn camera off" i]',
-            'input[role="switch"][data-tid="toggle-video"]',
-            'button[aria-label*="Turn camera off" i]',
-            'button[aria-label*="Camera off" i]',
+        // Camera: on when it shows the assistant's picture, off otherwise.
+        if (avatarVideo) {
+          const cameraOnSelectors = [
+            'input[data-tid="toggle-video"]:not([checked])',
+            'input[type="checkbox"][title*="Turn camera on" i]',
+            'button[aria-label*="Turn camera on" i]',
+            'button[aria-label*="Camera on" i]',
           ];
-
-          for (const selector of cameraSelectors) {
+          for (const selector of cameraOnSelectors) {
             const cameraButton = this.page.locator(selector).first();
-            const isVisible = await cameraButton
-              .isVisible({ timeout: 1000 })
-              .catch(() => false);
+            const isVisible = await cameraButton.isVisible({ timeout: 1000 }).catch(() => false);
             if (isVisible) {
-              const label = await cameraButton.getAttribute('aria-label');
-              this._logger.info(`Clicking camera toggle: ${label}`);
+              this._logger.info('Turning the camera on to show the assistant picture');
               await cameraButton.click();
               await this.page.waitForTimeout(250);
               break;
             }
           }
-        } catch (err) {}
+        }
+
+        // Turn off camera (only when there is no picture to show)
+        if (!avatarVideo) {
+          try {
+            const cameraSelectors = [
+              'input[data-tid="toggle-video"][checked]',
+              'input[type="checkbox"][title*="Turn camera off" i]',
+              'input[role="switch"][data-tid="toggle-video"]',
+              'button[aria-label*="Turn camera off" i]',
+              'button[aria-label*="Camera off" i]',
+            ];
+
+            for (const selector of cameraSelectors) {
+              const cameraButton = this.page.locator(selector).first();
+              const isVisible = await cameraButton
+                .isVisible({ timeout: 1000 })
+                .catch(() => false);
+              if (isVisible) {
+                const label = await cameraButton.getAttribute('aria-label');
+                this._logger.info(`Clicking camera toggle: ${label}`);
+                await cameraButton.click();
+                await this.page.waitForTimeout(250);
+                break;
+              }
+            }
+          } catch (err) {}
+        }
 
         // Mute microphone
         try {
@@ -585,6 +618,7 @@ export class MicrosoftTeamsBot extends MeetBotBase {
       uploader,
     });
 
+    await removeAvatarVideo(avatarVideo);
     pushState('finished');
   }
 

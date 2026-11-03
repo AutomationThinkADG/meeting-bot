@@ -470,6 +470,9 @@ Notes:
 | `LONE_PARTICIPANT_EXIT_DELAY_SECONDS` | Delay before stopping after the bot has seen other participants and then becomes alone | `10` |
 | `TEAMS_PREWARM_ENABLED` | Enable the extra Microsoft Teams warmup browser pass for environments that still show first-run dialogs | `false` |
 | `TEAMS_AUDIO_STABILIZATION_MS` | Delay before starting Microsoft Teams ffmpeg recording after joining | `1000` |
+| `TEAMS_CAMERA_AVATAR` | Show the assistant's picture (sent as `image` with the join request) as the bot's camera in Teams; `false` keeps the camera off | `true` |
+| `ALONE_WAIT_AFTER_START_MINUTES` | Bot sent before the scheduled start: wait alone or in the lobby until this long after it | `10` |
+| `TEAMS_ANNOUNCE_IN_CHAT` | Post "<assistant> is transcribing this meeting." in the Teams chat | `true` |
 | `GOOGLE_CHROME_CDP_URL` | Optional CDP endpoint for Google Meet joins, e.g. `http://host.docker.internal:9222`, to use an external Chrome instead of Docker Chrome. | - |
 | `GOOGLE_CHROME_USER_DATA_DIR` | Optional persistent Chrome profile directory for Google Meet joins. Use a dedicated signed-in Google account profile. | - |
 | `GOOGLE_CHROME_STORAGE_STATE_PATH` | Optional Playwright storage state JSON for Google Meet joins when not using a persistent profile. | - |
@@ -588,6 +591,9 @@ src/
 - **ContextBridgeTask**: Manages browser context and automation
 - **RedisMessageBroker**: Handles Redis queue operations (RPUSH/BLMOVE/LREM)
 - **RedisConsumerService**: Processes messages from Redis queue asynchronously
+- **lib/avatarVideo.ts**: turns the assistant picture into the looping .y4m Chrome plays as the Teams camera (needs ffmpeg)
+- **lib/earlyJoin.ts**: how long an early bot waits for people (alone and lobby waits)
+- **GET /keepalive**: held open by vpm-api's botKeepAlive timer while bots are live, so scale-to-zero never stops a recording
 
 ## ⚠️ Limitations
 

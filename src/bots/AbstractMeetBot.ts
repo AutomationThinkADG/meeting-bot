@@ -23,6 +23,8 @@ export interface JoinParams {
   eventId?: string;
   /** The meeting's scheduled start (ISO), when the bot is sent early. */
   scheduledStart?: string;
+  /** The assistant's picture as a data URI; shown as the bot's camera in Teams. */
+  image?: string;
   uploader: IUploader;
 }
 

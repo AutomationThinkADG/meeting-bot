@@ -124,7 +124,17 @@ async function launchPersistentContextWithTimeout(launchFn: () => Promise<Browse
   });
 }
 
-async function createBrowserContext(url: string, correlationId: string, botType: BotType = 'google'): Promise<Page> {
+/** Extra launch options. fakeVideoFile: a .y4m Chrome plays as the webcam (lib/avatarVideo.ts); Teams only. */
+interface IBrowserOptions {
+  fakeVideoFile?: string | null;
+}
+
+async function createBrowserContext(
+  url: string,
+  correlationId: string,
+  botType: BotType = 'google',
+  options: IBrowserOptions = {},
+): Promise<Page> {
   const size = { width: 1280, height: 720 };
   const browserWindowSize = { width: size.width, height: size.height + 80 };
 
@@ -167,9 +177,12 @@ async function createBrowserContext(url: string, correlationId: string, botType:
   // Fake device args - only for Microsoft Teams
   // Teams needs fake devices to interact with pre-join screen toggles,
   // but actual recording is done via ffmpeg (X11 + PulseAudio)
+  // With a camera video (the assistant's picture), the fake camera plays that
+  // file instead of Chrome's test pattern.
   const fakeDeviceArgs: string[] = [
     '--use-fake-ui-for-media-stream',
     '--use-fake-device-for-media-stream',
+    ...(options.fakeVideoFile ? [`--use-file-for-fake-video-capture=${options.fakeVideoFile}`] : []),
   ];
 
   // Google Meet and Zoom use browser-based recording (getDisplayMedia + MediaRecorder)

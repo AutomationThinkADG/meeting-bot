@@ -1,4 +1,10 @@
-// npm test — the waits for a bot sent before the meeting's scheduled start.
+// earlyJoin.test.ts
+//
+// What it is: checks the waits for a bot sent before the meeting's scheduled start.
+// Requires:   src/lib/earlyJoin.ts.
+// Used by:    npm test (package.json).
+// How it works: fixed clock; no start, a start 2 minutes ahead, and one 20
+//   minutes past, each against the expected alone and lobby waits.
 import assert from 'assert';
 import { aloneGraceMinutes, lobbyWaitMs } from '../src/lib/earlyJoin';
 

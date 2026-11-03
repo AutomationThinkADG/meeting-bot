@@ -1,7 +1,15 @@
-// A bot sent before a meeting's scheduled start may sit alone (or in the
-// lobby) until people arrive. These stretch the "nobody else is here" and
-// lobby waits to cover that, so an early bot doesn't leave an empty meeting.
-// Without a scheduled start, the normal waits apply.
+// earlyJoin.ts
+//
+// What it is: how long a bot waits for people when it was sent before the
+//   meeting's scheduled start: the "nobody else is here" wait and the lobby wait.
+// Requires:   nothing.
+// Used by:    bots/MicrosoftTeamsBot.ts (lobby wait, alone and silence checks),
+//   test/earlyJoin.test.ts. Setting: ALONE_WAIT_AFTER_START_MINUTES (config.ts).
+// How it works: vpm-api sends the bot a few minutes early along with the
+//   scheduled start. Both waits are stretched to reach a while past that
+//   start, so an early bot doesn't leave an empty meeting before anyone
+//   arrives. Without a scheduled start, or when it already passed, the normal
+//   waits apply; they are never made shorter.
 
 /** Minutes the bot may stay alone before anyone else joins. */
 export function aloneGraceMinutes(

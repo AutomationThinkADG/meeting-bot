@@ -97,6 +97,9 @@ export default {
   // Number of retries for transient errors (not applied to WaitingAtLobbyRetryError)
   retryCount: process.env.RETRY_COUNT ? Number(process.env.RETRY_COUNT) : 2,
   teamsPrewarmEnabled: process.env.TEAMS_PREWARM_ENABLED === 'true',
+  // Show the assistant's picture as the bot's camera in Teams
+  // (lib/avatarVideo.ts). "false": camera always off.
+  teamsCameraAvatar: process.env.TEAMS_CAMERA_AVATAR !== 'false',
   teamsAudioStabilizationMs: process.env.TEAMS_AUDIO_STABILIZATION_MS
     ? Number(process.env.TEAMS_AUDIO_STABILIZATION_MS)
     : 1000,

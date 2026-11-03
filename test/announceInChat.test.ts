@@ -1,7 +1,13 @@
-// npx ts-node test/announceInChat.test.ts
-// The bot's "<assistant> is transcribing this meeting." chat line, against
-// small mock Teams pages in your installed Chrome. Real Teams markup changes;
-// the live check is in vpm-api/docs/TESTING.md (Layer 2).
+// announceInChat.test.ts
+//
+// What it is: checks the bot's "<assistant> is transcribing this meeting."
+//   chat line (announceInChat in src/lib/meetingReadiness.ts).
+// Requires:   Playwright and an installed Google Chrome (channel "chrome").
+// Used by:    npm test (package.json).
+// How it works: small mock Teams pages stand in for the meeting: the text,
+//   the project's name, a blank name, no chat button, read-only chat, and the
+//   switch-off setting. Real Teams markup changes; the live check is in
+//   vpm-api/docs/TESTING.md (Layer 2).
 import assert from 'assert';
 import { chromium } from 'playwright';
 import { createLogger, transports } from 'winston';
